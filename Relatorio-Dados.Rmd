@@ -1,0 +1,288 @@
+---
+title: ""
+output: 
+    pdf_document
+link-citations: true
+nocite: | 
+  @ref1, @ref2, @ref3, @ref4
+---
+
+\centering
+\raggedright
+\begin{center}
+```{r pressure, echo=FALSE,out.width = '50%',fig.align='center'}
+knitr::include_graphics("unb.jpg")
+```
+ \Large Universidade de Brasília\\
+ IE - Departamento de Estatística
+\end{center} 
+ \vskip 12em
+\begin{center}
+ \Large \textbf{Trabalho Final - Análise de Dados Categorizados}
+ \par
+ \vskip 7em
+\end{center}
+\setlength{\baselineskip}{.5cm}
+\small \textbf{}
+\par
+\vskip 5em
+
+\begin{flushright}
+\Large Eduardo Felipe Machado Côrtes\\
+\small 170140784\\
+\Large Laura Cristina Melo Teixeira\\
+\small 190016051\\
+\Large Marcelo Pereira De Souza Fleury\\
+\small 190017252
+\vskip 2em
+\Large Professora: Maria Teresa Leão Costa
+\end{flushright}
+
+\vskip 6em
+\begin{center}
+\setlength{\baselineskip}{.5cm}
+Brasília\\
+\vskip 1em
+Outubro de 2022
+\end{center}
+\newpage
+\tableofcontents
+\newpage
+
+```{r setup, include=FALSE,warning=FALSE,message=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	fig.align = 'center'
+)
+```
+
+
+# 1. Introdução e Objetivos
+
+\newpage
+
+# 2. Metodologia
+
+\newpage
+
+# 3. Resultados
+
+## 3.1 Análise Exploratória
+
+```{r}
+# Carregar os dados
+library(xlsx)
+library(tidyverse)
+dados <- read.xlsx(file="/home/lauratei/UNB/DADOS/Trabalho/Amostra_g06.xlsx",
+                   sheetName = "Amostra_g06")
+
+# Seleciona a amostra n=51
+set.seed(12345)
+rows_index <- sample(1:nrow(dados),51)
+amostra <- dados[rows_index,]
+
+#Define o tema dos gráficos
+tema <- theme_bw()+
+theme(axis.title.y=element_text(colour="black", size=14),
+axis.title.x = element_text(colour="black", size=14),
+axis.text = element_text(colour = "black", size=14),
+panel.border = element_blank(),
+axis.line = element_line(colour = "black"),
+plot.title = element_text(hjust = 0.5, size=18),
+legend.position = "bottom",
+legend.text=element_text(size=18))
+
+```
+
+
+### 3.1.1 Análises Univariadas
+
+```{r, fig.width=8,out.width = '80%'}
+# X1 - Resultado da radiografia
+# 0 – negativo 1 – positivo
+
+Fr <- table(amostra$X1)
+Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
+colnames(Pr)<-c("Var1","Pr" )
+comp <- merge(Fr,Pr, by= "Var1" )
+comp$Pr<-paste(gsub( "\\." , "," ,comp$Pr ) , "%" , sep="")
+comp$Var1 <- c("Negativo","Positivo")
+
+# Grafico barras
+ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
+geom_bar(stat="identity",fill="#6E6DB8")+
+geom_text(vjust=-0.5,size=4)+
+labs(x="Resultado da radiografia",y="Frequência Absoluta")+
+tema
+
+```
+
+```{r, fig.width=8,out.width = '80%'}
+# X2 - Estágio do tumor
+# 0 – menos grave ou 1 – mais grave
+Fr <- table(amostra$X2)
+Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
+colnames(Pr)<-c("Var1","Pr" )
+comp <- merge(Fr,Pr, by= "Var1" )
+comp$Pr<-paste(gsub( "\\." , "," ,comp$Pr ) , "%" , sep="")
+comp$Var1 <- c("Menos grave","Mais grave")
+
+# Grafico barras
+ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
+geom_bar(stat="identity",fill="#6E6DB8")+
+geom_text(vjust=-0.5,size=4)+
+labs(x="Estágio do tumor",y="Frequência Absoluta")+
+tema
+
+```
+
+```{r, fig.width=8,out.width = '80%'}
+# X3 - Nível de fosfatase ácida
+
+# Boxplot
+
+ggplot(amostra,aes(x=factor(""),y=X3))+
+geom_boxplot(fill=c("#6E6DB8"),width=0.5)+
+guides(fill=FALSE)+
+stat_summary(fun.y="mean",geom="point",shape=23,size=3,
+fill="white")+
+labs(x="",y="Nível de fosfatase ácida")+
+tema
+```
+
+```{r}
+# Tabela medidas resumo
+library(kableExtra)
+
+summaryX3 <- summary(amostra$X3)
+
+tbl1 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
+                                   "Mediana","Média","3º Quartil",
+                                   "Máximo","Desvio Padrão"),
+                   "Valor"=c(summaryX3,sd(amostra$X3)),
+                   check.names = F)
+
+rownames(tbl1)<-NULL
+
+tbl1 %>%
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Medidas resumo do nível de fosfatase ácida') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+```
+
+```{r, fig.width=8,out.width = '80%'}
+# X4 - Envolvimento nodal
+# 0 – sim 1 – não
+
+Fr <- table(amostra$X4)
+Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
+colnames(Pr)<-c("Var1","Pr" )
+comp <- merge(Fr,Pr, by= "Var1" )
+comp$Pr<-paste(gsub( "\\." , "," ,comp$Pr ) , "%" , sep="")
+comp$Var1 <- c("Sim","Não")
+
+# Grafico barras
+ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
+geom_bar(stat="identity",fill="#6E6DB8")+
+geom_text(vjust=-0.5,size=4)+
+labs(x="Envolvimento nodal",y="Frequência Absoluta")+
+tema
+
+```
+
+
+### 3.1.2 Análises Bivariadas
+
+```{r}
+# X1 vs X4
+amostra$X1 <- as.factor(amostra$X1)
+
+# tabela contingencia
+tab_X1_X4 <- addmargins(table(amostra$X1,amostra$X4))
+
+tab_X1_X4 %>%
+  kableExtra::kbl(.,digits=2,align=c('c','c','c'),booktabs = T,
+                  caption = 'Tabela de Contingência do resultado da radiografia e envolvimento nodal') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+**Melhorar essas tabelas de contingência**
+
+```{r}
+# teste correlação 
+chisq.test(x=amostra$X1,y=amostra$X4)
+```
+
+
+```{r}
+# X2 vs X4
+amostra$X2 <- as.factor(amostra$X2)
+# tabela contingencia
+tab_X2_X4 <- addmargins(table(amostra$X2,amostra$X4))
+
+tab_X2_X4 %>%
+  kableExtra::kbl(.,digits=2,align=c('c','c','c'),booktabs = T,
+                  caption = 'Tabela de Contingência do estágio do tumor e envolvimento nodal') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+```
+
+```{r}
+# teste correlação 
+chisq.test(x=amostra$X2,y=amostra$X4)
+```
+
+
+```{r, fig.width=8,out.width = '80%'}
+# X3 vs X4
+amostra$X4 <- as.factor(amostra$X4)
+
+dadosbox <- amostra
+dadosbox$X4extenso <- ifelse(dadosbox$X4==0,"Sim","Não")
+#Boxplot
+ggplot(dadosbox,aes(x=X4extenso,y=X3))+
+geom_boxplot(fill=c("#6E6DB8"),width=0.5)+
+stat_summary(fun.y="mean",geom="point",shape=23,size=3,
+fill="white")+
+labs(x="Envolvimento nodal",y="Nível de fosfatase ácida")+
+tema
+
+```
+```{r}
+# Tabela X3 vs X4
+library(magrittr)
+env_nodal <- amostra %>% filter(X4==0)
+sem_env_nodal <- amostra %>% filter(X4==1)
+
+tbl2 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
+                                   "Mediana","Média","3º Quartil",
+                                   "Máximo","Desvio Padrão"),
+                   "Com envolvimento nodal"=c(summary(env_nodal$X3),sd(env_nodal$X3)),
+                   "Sem envolvimento nodal"=c(summary(sem_env_nodal$X3),sd(sem_env_nodal$X3)),
+                   check.names = F)
+
+rownames(tbl2)<-NULL
+
+tbl2 %>%
+  kableExtra::kbl(.,digits=2,align=c('l','c','c'),booktabs = T,
+                  caption = 'Medidas resumo da fosfatase ácida por envolvimento nodal') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+
+```
+
+
+\newpage
+
+## 3.2 Modelagem
+
+\newpage
+
+# 4. Conclusão
+
+\newpage
+
+# 5. Apêndice
