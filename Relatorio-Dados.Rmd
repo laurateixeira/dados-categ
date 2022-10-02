@@ -61,6 +61,10 @@ knitr::opts_chunk$set(
 
 # 1. Introdução e Objetivos
 
+O presente estudo busca elucidar quais fatores impactam na probabilidade de um determinado paciente, que desenvolveu câncer de próstata, ter envolvimento nodal, isto é, a denominação dada quando o câncer já se espalhou para os linfonodos próximos. Para entender quais variáveis são importantes para a predição do envolvimento nodal e de que forma elas estão relacionadas, será feito um estudo exploratório, seguido de uma análise inferencial por meio de modelos de regressão logística.
+
+Para alcançar tais objetivos, este estudo dispõe de uma amostra aleatória de 102 pacientes, contendo as seguintes variáveis pré-operatórias: resultado da radiografia (positivo ou negativo), estágio do tumor (menos grave ou mais grave), nível de fosfatase ácida e envolvimento nodal (sim ou não). Será adotado um nível de significância $\alpha=5\%$. As análises serão feitas por meio do software estatístico R (versão 4.1.2), cujo código está presente na seção de apêndice.
+
 \newpage
 
 # 2. Metodologia
@@ -70,6 +74,8 @@ knitr::opts_chunk$set(
 # 3. Resultados
 
 ## 3.1 Análise Exploratória
+
+Com o intuito de apresentar e compreender as variáveis presentes na amostra, segue-se com as análises exploratórias pertinentes.
 
 ```{r}
 # Carregar os dados
@@ -99,6 +105,11 @@ legend.text=element_text(size=18))
 
 ### 3.1.1 Análises Univariadas
 
+#### 3.1.1.1 Variáveis Explicativas
+
+
+O resultado da radiografia, variável qualitativa nominal, está representada no gráfico abaixo.
+
 ```{r, fig.width=8,out.width = '80%'}
 # X1 - Resultado da radiografia
 # 0 – negativo 1 – positivo
@@ -119,6 +130,9 @@ tema
 
 ```
 
+A maioria dos pacientes amostrados (cerca de 67%) apresentou o resultado da radiografia negativo. Em relação ao estágio do tumor, variável qualitativa ordinal, observa-se o seguinte gráfico de barras. 
+
+
 ```{r, fig.width=8,out.width = '80%'}
 # X2 - Estágio do tumor
 # 0 – menos grave ou 1 – mais grave
@@ -137,6 +151,9 @@ labs(x="Estágio do tumor",y="Frequência Absoluta")+
 tema
 
 ```
+
+
+Cerca de 55% dos indivíduos possui um estágio de tumor mais grave, enquanto 45% um estágio menos grave. A análise do nível de fosfatase ácida está apresentada a seguir. 
 
 ```{r, fig.width=8,out.width = '80%'}
 # X3 - Nível de fosfatase ácida
@@ -173,6 +190,13 @@ tbl1 %>%
 
 ```
 
+O nível de fosfatase ácida é de, em média, 70,47, um valor próximo da mediana (67), mas que foi um pouco deslocado por conta dos 2 pontos discrepantes (*outliers*) presentes na amostra, cujos valores são 136 e 187. Apesar disso, de forma geral, pode-se dizer que os valores de fosfatase ácida estão distribuídos de forma simétrica em torno da média e com um valor de variância que não é alto, o que pode ser visto pelo seu coeficiente de variação de 38%. 
+
+Por fim, a variável resposta do estudo, o envolvimento nodal, é apresentada na seção seguinte.
+
+
+#### 3.1.1.2 Variável Resposta
+
 ```{r, fig.width=8,out.width = '80%'}
 # X4 - Envolvimento nodal
 # 0 – sim 1 – não
@@ -193,57 +217,60 @@ tema
 
 ```
 
+O envolvimento nodal, variável qualitativa nominal, é uma condição presente na maior parte dos pacientes pesquisados, cerca de 55%. Enquanto os 45% restantes não apresentam esse cenário do quadro de saúde.
 
 ### 3.1.2 Análises Bivariadas
 
+A primeira análise bivariada busca compreender a relação entre o resultado da radiografia com a variável resposta (envolvimento nodal).
+
 ```{r}
+library(gmodels)
 # X1 vs X4
-amostra$X1 <- as.factor(amostra$X1)
+bivariadas<-amostra
+bivariadas$X1 <- ifelse(bivariadas$X1==0,"Negativo","Positivo")
+bivariadas$X4 <- ifelse(bivariadas$X4==0,"Sim","Não")
 
-# tabela contingencia
-tab_X1_X4 <- addmargins(table(amostra$X1,amostra$X4))
+names(bivariadas)<-c("ID","Resultado da radiografia",
+                     "Estágio do tumor","Nível de fosfatase ácida",
+                     "Envolvimento nodal")
 
-tab_X1_X4 %>%
-  kableExtra::kbl(.,digits=2,align=c('c','c','c'),booktabs = T,
-                  caption = 'Tabela de Contingência do resultado da radiografia e envolvimento nodal') %>% 
-  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+# tabela contingencia (formato de saída do SAS)
+CrossTable(bivariadas$`Envolvimento nodal`,bivariadas$`Resultado da radiografia`,digits=2)
 ```
 
-**Melhorar essas tabelas de contingência**
+Nota-se pela tabela de contingência que a grande maioria dos pacientes com envolvimento nodal tiveram o resultado da radiografia negativo (89%). Por outro lado, dentre os indivíduos sem envolvimento nodal, a maior parte (61%) teve o resultado da radiografia positivo. Esses percentuais indicam uma possível correlação entre as variáveis. Portanto, temos em seguida o resultado do teste qui-quadrado de associação (independência): 
 
 ```{r}
 # teste correlação 
-chisq.test(x=amostra$X1,y=amostra$X4)
+chisq.test(x=bivariadas$`Resultado da radiografia`,y=bivariadas$`Envolvimento nodal`)
 ```
+
+Tendo em vista o baixo p-valor, rejeita-se a hipótese nula de independência entre o envolvimento nodal e o resultado da radiografia. Seguindo a análise bivariada, observa-se a relação entre o estágio do tumor e a variável resposta:
 
 
 ```{r}
 # X2 vs X4
-amostra$X2 <- as.factor(amostra$X2)
+bivariadas$`Estágio do tumor` <- ifelse(bivariadas$`Estágio do tumor`==0,"Menos grave","Mais grave")
+
 # tabela contingencia
-tab_X2_X4 <- addmargins(table(amostra$X2,amostra$X4))
-
-tab_X2_X4 %>%
-  kableExtra::kbl(.,digits=2,align=c('c','c','c'),booktabs = T,
-                  caption = 'Tabela de Contingência do estágio do tumor e envolvimento nodal') %>% 
-  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
-
+CrossTable(bivariadas$`Envolvimento nodal`,bivariadas$`Estágio do tumor`,digits=2)
 ```
+
+A tabela de contingência revela que dentre os pacientes com envolvimento nodal, 68% apresentam estágio de tumor menos grave. Já entre os pacientes em envolvimento nodal o cenário é oposto: 83% estão com um estágio de tumor mais grave. Para confirmar uma possível associação entre essas variáveis realizou-se o teste qui-quadrado de independência:
+
 
 ```{r}
 # teste correlação 
-chisq.test(x=amostra$X2,y=amostra$X4)
+chisq.test(x=bivariadas$`Estágio do tumor`,y=bivariadas$`Envolvimento nodal`)
 ```
 
+Novamente, com o p-valor muito abaixo do nível de significância ($\alpha=5\%$), rejeita-se a hipótese nula de independência. Conclui-se que existe associação entre o envolvimento nodal e o estágio do tumor do paciente. A seguir, obtém-se os gráficos e tabelas para análise da relação entre o nível de fosfatase ácida e o envolvimento nodal.
 
 ```{r, fig.width=8,out.width = '80%'}
 # X3 vs X4
-amostra$X4 <- as.factor(amostra$X4)
 
-dadosbox <- amostra
-dadosbox$X4extenso <- ifelse(dadosbox$X4==0,"Sim","Não")
 #Boxplot
-ggplot(dadosbox,aes(x=X4extenso,y=X3))+
+ggplot(bivariadas,aes(x=`Envolvimento nodal`,y=`Nível de fosfatase ácida`))+
 geom_boxplot(fill=c("#6E6DB8"),width=0.5)+
 stat_summary(fun.y="mean",geom="point",shape=23,size=3,
 fill="white")+
@@ -274,6 +301,8 @@ tbl2 %>%
 
 ```
 
+
+**Escrever Análise**
 
 \newpage
 
