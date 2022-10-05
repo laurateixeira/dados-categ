@@ -340,7 +340,7 @@ confint(fit) # profile likelihood confidence interval
 O modelo de regressão logística ajustado para a probabilidade $\pi(x)$ do paciente *não* apresentar envolvimento nodal em câncer de próstata é descrito a seguir.
 
 $$\text{logito}[\hat{\pi}(x)] = -2.30638 + 0.03035x$$
-Para um nível de significância $\alpha=5\%$, rejeitamos a hipótese de independência da probabilidade de não envolvimento nodal em relação ao nível de fosfatase ácida ($\hat{\beta}_1 = 0$). Assim também, a estatística de razão de verossimilhança é de 5.605 e o p-valor aproximadamente 0.018, isto é, existem evidências de que a probabilidade não é idêntica para todos os níveis de fosfatase ácida, a um nível de significância $\alpha=5\%$.
+Observe que para o teste de razão de verossimilhança rejeitamos a hipótese de independência da probabilidade de não envolvimento nodal em relação ao nível de fosfatase ácida ($\hat{\beta}_1 = 0$), para um nível de significância $\alpha=5\%$. Assim também, a estatística de razão de verossimilhança é de 5.605 e o p-valor aproximadamente 0.018, isto é, existem evidências de que a probabilidade não é idêntica para todos os níveis de fosfatase ácida, a um nível de significância $\alpha=5\%$.
 
 Note que, $\hat{\beta}_1$ é positivo, então a probabilidade estimada é maior quanto maior o nível de fosfatase ácida. No nível mínimo, 40 na amostra selecionada para o ajuste, a probabilidade estimada de não envolvimento nodal é de 0.251 e no nível máximo é de 0.967. Assim, o efeito da fosfatase ácida é relativamente forte considerando a diferença entre os valores estimados para o mínimo e o máximo da amostra.
 
@@ -406,24 +406,22 @@ O p-valor indica que existem evidências para rejeitar a hipótese de ajuste do 
 
 <!-- Regressão Logística Múltipla -->
 
-Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias. Assim, para a seleção das variáveis do modelo utilizamos o método stepwise considerando os critérios AIC e BIC.
+Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias e suas interações. Assim, para a seleção das variáveis do modelo considera-se os critérios AIC e BIC, combinando os métodos stepwise "Forward selection" e "Backward elimination".
 
 ```{r}
-log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=treinamento)
+log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1) + X3*factor(X2) + factor(X1)*factor(X2) +  X3*factor(X1)*factor(X2), family=binomial, data=treinamento)
 ```
 
 ```{r}
 library(MASS)
-log_multipla_AIC <- log_multipla %>% stepAIC(trace = TRUE, direction="both")
-summary(log_multipla_AIC)
+log_multipla_AIC <- log_multipla %>% stepAIC(trace = F, direction="both")
 ```
+
+<!-- PRECISO DE ALGUM STEPAIC CORRIGIDO QUE TEM PRINT DOS STEPSSSSS, PORQUE ESSE AIC CANALHA PARA NO MINIMO LOCAL -->
 
 ```{r}
-log_multipla_BIC <- log_multipla %>% stepAIC(trace = TRUE, direction="both", k=log(51))
-summary(log_multipla_BIC)
+log_multipla_BIC <- log_multipla %>% stepAIC(trace = F, direction="both", k=log(51))
 ```
-
-Em ambos casos o modelo final selecionado considera todas as variáveis. No entanto, observe como os resultados do AIC e do BIC para o modelo com duas variáveis (resultado da radiografia e estágio do tumor) também apresenta valores relativamente baixos.
 
 
 ```{r}
@@ -435,14 +433,17 @@ plot(aicplot(log_multipla_BIC))
 ```
 
 
+O modelo final selecionado pelo BIC considera as 3 variáveis sem interações, com forte penalização dos modelos com muitos parâmetros. No entanto, observe como os resultados do AIC e do BIC para o modelo com duas variáveis (resultado da radiografia e estágio do tumor) também apresenta valores relativamente baixos, de 49.73 e 55.53, respectivamente.
+
 
 <!-- FALTA justificar escolha dos dois modelos -->
 
-Os modelos ajustados são descritos a seguir.
+Assim, considera-se a interpretabilidade como outro fator importante para seleção dos modelos candidatos. Os modelos ajustados são descritos a seguir.
 
 $$\text{logito}[\hat{\pi}(x)] = -2.30638 + 0.03035x_1 + 2.80120x_2 + 3.13819x_3$$
 $$\text{logito}[\hat{\pi}(x)] = -2.5888 + 2.7833x_2 + 2.5243x_3$$
-Assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
+
+Para os dois casos, assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
 
 
 ```{r}
@@ -456,13 +457,56 @@ modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2), family=binomial, data=
 1 - pchisq(modelo_final_complexo$null.deviance - modelo_final_complexo$deviance, length(coef(modelo_final_complexo)))
 ```
 
-<!-- Testando deviance PARCIAL para modelo mais simples -->
+<!-- Testando deviance para modelo mais simples -->
 
 Dado que o modelo mais complexo se ajusta, deseja-se testar que o modelo mais simples se ajusta.
 
 ```{r}
-G_2 <- modelo_final_simples$deviance - modelo_final_complexo$deviance
-1-pchisq(G_2,1)
+1 - pchisq(modelo_final_simples$null.deviance - modelo_final_simples$deviance, length(coef(modelo_final_simples)))
+```
+
+<!-- TESTE DE AJUSTAMENTO -->
+
+```{r}
+# teste para modelo mais simples
+1 - pchisq(modelo_final_simples$deviance, modelo_final_simples$df.residual)
+```
+```{r}
+# teste para modelo mais complexo (com variável continua)
+hoslem_test_resultado <- hoslem.test(modelo_final_complexo$y, fitted(modelo_final_complexo), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>% mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+```{r}
+hoslem_test_resultado
+```
+
+
+<!-- COMENTAR Matriz de confusão -->
+
+Observe as matrizes de confusão com o limite de decisão definido em 0.5.
+
+```{r}
+library(caret)
+
+confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
+
+confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_complexo) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
+```
+
+```{r}
+confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_simples) > .5, 1, 0))), factor(treinamento$X4))$table
+
+confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_simples) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
 ```
 
 
@@ -484,6 +528,27 @@ invisible(plot(roc(treinamento$X4,
 
 <!-- O modelo mais complexo é superior (AUC é maior) COMENTAR  -->
 
+
+<!-- ANALISE DE RESIDUOS PADRONIZADOS -->
+
+```{r}
+tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+```
+
+
+```{r}
+tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+```
+
+<!-- Residuos vs valores ajustados -->
 
 \newpage
 
