@@ -457,7 +457,9 @@ formatar_explicativas_modelo = function(formula) {
   formula %>%
       {as.character(.)[3]} %>%
       str_remove_all("factor\\(|\\)") %>%
-      str_replace_all(":", '*')
+      str_replace_all(":", '*') %>%
+    str_replace_all(" \\* ","*")%>%
+    str_replace_all(" \\+ ","+")
 }
 log_multipla_BIC_nula = glm(X4~., family=binomial, data=treinamento)
 
@@ -505,10 +507,11 @@ ajustes_modelos %<>% bind_rows(
     )
   )
 )
+ajustes_modelos$Modelo <- 0:6
 ajustes_modelos %>%
-  kableExtra::kbl(digits=2,align=c('l','l','c'),booktabs = T,
+  kableExtra::kbl(digits=2,align=c('l','l','l','l','l','l','l'),booktabs = T,
                   caption = 'Medidas de ajuste dos modelos') %>% 
-  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+  kableExtra::kable_classic(full_width=F,latex_options = "HOLD_position")
 ```
 
 
@@ -729,7 +732,6 @@ cowplot::plot_grid(res_padronizado_1,res_padronizado_2,
 
 ```{r}
 # formula = X4 ~ X3 + factor(X1) + factor(X2)
-
 modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=amostra)
 
 summary(modelo_no_banco_completo)
@@ -740,23 +742,51 @@ summary(modelo_no_banco_completo)
 
 
 ```{r}
-# matriz de confusao e acuracia
-probabs_preditas <- predict(modelo_no_banco_completo, newdata = amostra,type = "response")
+# Intevalos para os parametros (95%)
 
-truth_predicted<-data.frame(
-  obs = as.factor(amostra$X4),
-  pred = factor(as.vector(ifelse(probabs_preditas > .5, 1, 0)))
-)
+z <- qnorm(0.975)
+b1 <- modelo_no_banco_completo$coefficients[3]
+b2 <- modelo_no_banco_completo$coefficients[4]
+b3<- modelo_no_banco_completo$coefficients[2]
+ASE1 <- summary(modelo_no_banco_completo)$coefficients[3,2]
+ASE2 <- summary(modelo_no_banco_completo)$coefficients[4,2]
+ASE3 <- summary(modelo_no_banco_completo)$coefficients[2,2] 
+# b1
+b1_ic <- c(b1-z*ASE1,b1+z*ASE1)
+b1_ic_string <- paste("[",round(b1_ic[1],3),",",round(b1_ic[2],3),"]")
+# b2
+b2_ic <- c(b2-z*ASE2,b2+z*ASE2)
+b2_ic_string <- paste("[",round(b2_ic[1],3),",",round(b2_ic[2],3),"]")
 
-conf_mat(truth_predicted, obs, pred) %>% autoplot(type = "heatmap") +
-  scale_fill_gradient(low="#D6EAF8",high = "#2E86C1")
+# b3
+b3_ic <- c(b3-z*ASE3,b3+z*ASE3)
+b3_ic_string <- paste("[",round(b3_ic[1],3),",",round(b3_ic[2],3),"]")
+
+
+# Intervalos para odds
+
+odds_b1 <- exp(b1_ic)
+odds_b1_string <- paste("[",round(odds_b1[1],3),",",round(odds_b1[2],3),"]")
+odds_b2 <- exp(b2_ic)
+odds_b2_string <- paste("[",round(odds_b2[1],3),",",round(odds_b2[2],3),"]")
+odds_b3 <- exp(b3_ic)
+odds_b3_string <- paste("[",round(odds_b3[1],3),",",round(odds_b3[2],3),"]")
+
+tbl_intervalos_betas_odds <- data.frame("Coeficiente"=c("Beta 1","Beta 2","Beta 3"),
+                                        "Intervalo do coeficiente"=c(b1_ic_string,
+                                                                     b2_ic_string,
+                                                                     b3_ic_string),
+                                        "Intervalo da Odds"=c(odds_b1_string,
+                                                              odds_b2_string,
+                                                              odds_b3_string),
+                                        check.names = F)
+
+tbl_intervalos_betas_odds %>% 
+  kableExtra::kbl(.,digits=3,align=c('l','c','c'),booktabs = T,
+                  caption = 'Intervalos de confiança (95%) para o modelo final') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
 
 ```
-
-```{r}
-confusionMatrix(truth_predicted$pred, as.factor(amostra$X4))$overall[1]
-```
-
 
 \newpage
 
