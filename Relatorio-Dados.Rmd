@@ -81,13 +81,16 @@ Com o intuito de apresentar e compreender as variáveis presentes na amostra, se
 # Carregar os dados
 library(xlsx)
 library(tidyverse)
-dados <- read.xlsx(file="/home/lauratei/UNB/DADOS/Trabalho/Amostra_g06.xlsx",
+setwd(getwd())
+
+amostra <- read.xlsx(file="Amostra_g06.xlsx",
                    sheetName = "Amostra_g06")
 
 # Seleciona a amostra n=51
 set.seed(12345)
-rows_index <- sample(1:nrow(dados),51)
-amostra <- dados[rows_index,]
+rows_index <- sample(1:nrow(amostra),51)
+treinamento <- amostra[rows_index,]
+validacao <- amostra[-rows_index,]
 
 #Define o tema dos gráficos
 tema <- theme_bw()+
@@ -307,6 +310,180 @@ tbl2 %>%
 \newpage
 
 ## 3.2 Modelagem
+
+<!-- Regressão Logística Simples -->
+
+Primeiro deseja-se avaliar especificamente o efeito do nível de fosfatase ácida na predição para envolvimento nodal.
+
+```{r}
+treinamento %>% ggplot(aes(x=X3, y=X4)) + 
+  geom_point() + 
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"), 
+              se = FALSE, color="#6E6DB8", size=0.6) +
+  labs(y="Envolvimento nodal",x="Nível de fosfatase ácida") +
+  tema
+```
+
+O envolvimento nodal ocorre com maior frequência em níveis de fosfatase ácida mais baixos, mas apresenta alguns valores extremos como indicados na seção anterior. Como o envolvimento nodal assume apenas os valores 0 e 1, é difícil determinar a partir do gráfico de dispersão se o modelo é apropriado.
+
+```{r}
+log_simples <- glm(X4 ~ X3, family=binomial, data=treinamento)
+summary(log_simples)
+```
+
+```{r}
+confint(fit) # profile likelihood confidence interval
+```
+
+
+O modelo de regressão logística ajustado para a probabilidade $\pi(x)$ do paciente *não* apresentar envolvimento nodal em câncer de próstata é descrito a seguir.
+
+$$\text{logito}[\hat{\pi}(x)] = -2.30638 + 0.03035x$$
+Para um nível de significância $\alpha=5\%$, rejeitamos a hipótese de independência da probabilidade de não envolvimento nodal em relação ao nível de fosfatase ácida ($\hat{\beta}_1 = 0$). Assim também, a estatística de razão de verossimilhança é de 5.605 e o p-valor aproximadamente 0.018, isto é, existem evidências de que a probabilidade não é idêntica para todos os níveis de fosfatase ácida, a um nível de significância $\alpha=5\%$.
+
+Note que, $\hat{\beta}_1$ é positivo, então a probabilidade estimada é maior quanto maior o nível de fosfatase ácida. No nível mínimo, 40 na amostra selecionada para o ajuste, a probabilidade estimada de não envolvimento nodal é de 0.251 e no nível máximo é de 0.967. Assim, o efeito da fosfatase ácida é relativamente forte considerando a diferença entre os valores estimados para o mínimo e o máximo da amostra.
+
+No ponto em que cada resultado tem 50% de probabilidade, o nível de fosfatase ácida é de 76 aproximadamente. Por outro lado, para o valor médio de 70.47, a probabilidade é de 0.458. 
+
+Por último, a chance estimada para $\hat{\beta}_1$ é multiplicada por 1.03 para cada unidade adicionada de fosfatase ácida, ou seja, um aumento de 3%.
+
+
+```{r}
+lp <- predict(log_simples, newdata=validacao, se.fit=TRUE) # preditor linear
+prob_preditas <- exp(lp$fit)/(1 + exp(lp$fit))
+LB <- lp$fit - qnorm(0.975)*lp$se.fit
+UB <- lp$fit + qnorm(0.975)*lp$se.fit
+LB_p <- exp(LB)/(1 + exp(LB)) 
+UB_p <- exp(UB)/(1 + exp(UB))
+
+tabela_preditos <- tibble(X3=validacao$X3, prob_preditas = prob_preditas, LB_p = LB_p, UB_p = UB_p)
+```
+
+```{r}
+validacao %>% ggplot(aes(x=X3, y=X4)) + 
+  geom_point() +
+  geom_line(data=tabela_preditos, 
+            aes(x=X3, y=prob_preditas), 
+            color="#6E6DB8", size=0.6) +
+   geom_line(data=tabela_preditos,
+             aes(x=X3, y=LB_p), 
+             color="#F1A661", size=0.6,
+             linetype = "dashed") +
+   geom_line(data=tabela_preditos, 
+             aes(x=X3, y=UB_p), 
+             color="#F1A661", size=0.6,
+             linetype = "dashed") +
+  labs(y="Envolvimento nodal",x="Nível de fosfatase ácida") +
+  tema
+```
+
+Verifica-se o ajuste por meio do teste de Hosmer-Lemeshow.
+
+```{r}
+library(kableExtra)
+library(ResourceSelection)
+hoslem_test_resultado <- hoslem.test(log_simples$y, fitted(log_simples), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+```{r}
+hoslem_test_resultado
+```
+
+O p-valor indica que existem evidências para rejeitar a hipótese de ajuste do modelo a um nível de significância $\alpha=5\%$.
+
+
+<!-- Regressão Logística Múltipla -->
+
+Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias. Assim, para a seleção das variáveis do modelo utilizamos o método stepwise considerando os critérios AIC e BIC.
+
+```{r}
+log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=treinamento)
+```
+
+```{r}
+library(MASS)
+log_multipla_AIC <- log_multipla %>% stepAIC(trace = TRUE, direction="both")
+summary(log_multipla_AIC)
+```
+
+```{r}
+log_multipla_BIC <- log_multipla %>% stepAIC(trace = TRUE, direction="both", k=log(51))
+summary(log_multipla_BIC)
+```
+
+Em ambos casos o modelo final selecionado considera todas as variáveis. No entanto, observe como os resultados do AIC e do BIC para o modelo com duas variáveis (resultado da radiografia e estágio do tumor) também apresenta valores relativamente baixos.
+
+
+```{r}
+library(aicplot)
+
+plot(aicplot(log_multipla_AIC))
+
+plot(aicplot(log_multipla_BIC))
+```
+
+
+
+<!-- FALTA justificar escolha dos dois modelos -->
+
+Os modelos ajustados são descritos a seguir.
+
+$$\text{logito}[\hat{\pi}(x)] = -2.30638 + 0.03035x_1 + 2.80120x_2 + 3.13819x_3$$
+$$\text{logito}[\hat{\pi}(x)] = -2.5888 + 2.7833x_2 + 2.5243x_3$$
+Assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
+
+
+```{r}
+modelo_final_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=treinamento)
+modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2), family=binomial, data=treinamento)
+```
+
+<!-- Testando deviance para modelo mais complexo -->
+
+```{r}
+1 - pchisq(modelo_final_complexo$null.deviance - modelo_final_complexo$deviance, length(coef(modelo_final_complexo)))
+```
+
+<!-- Testando deviance PARCIAL para modelo mais simples -->
+
+Dado que o modelo mais complexo se ajusta, deseja-se testar que o modelo mais simples se ajusta.
+
+```{r}
+G_2 <- modelo_final_simples$deviance - modelo_final_complexo$deviance
+1-pchisq(G_2,1)
+```
+
+
+```{r}
+library(pROC)
+
+invisible(plot(roc(treinamento$X4,
+                   fitted(modelo_final_complexo)),
+               print.auc = T,
+               col = "red", 
+               main = "Curvas ROC: Modelo de 4 parâmetros (red) vs. Modelo de 3 parâmetros"))
+
+
+invisible(plot(roc(treinamento$X4,
+                   fitted(modelo_final_simples)),
+               col = "blue", 
+               add = T))
+```
+
+<!-- O modelo mais complexo é superior (AUC é maior) COMENTAR  -->
+
 
 \newpage
 
