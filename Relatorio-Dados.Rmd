@@ -79,12 +79,13 @@ Com o intuito de apresentar e compreender as variáveis presentes na amostra, se
 
 ```{r}
 # Carregar os dados
-library(xlsx)
+library(readxl)
 library(tidyverse)
+library(magrittr)
 setwd(getwd())
 
-amostra <- read.xlsx(file="Amostra_g06.xlsx",
-                   sheetName = "Amostra_g06")
+amostra <- read_xlsx(path="Amostra_g06.xlsx",
+                   sheet = "Amostra_g06")
 
 # Seleciona a amostra n=51
 set.seed(12345)
@@ -333,7 +334,7 @@ summary(log_simples)
 ```
 
 ```{r}
-confint(fit) # profile likelihood confidence interval
+confint(log_simples) # profile likelihood confidence interval
 ```
 
 
@@ -420,7 +421,67 @@ log_multipla_AIC <- log_multipla %>% stepAIC(trace = F, direction="both")
 <!-- PRECISO DE ALGUM STEPAIC CORRIGIDO QUE TEM PRINT DOS STEPSSSSS, PORQUE ESSE AIC CANALHA PARA NO MINIMO LOCAL -->
 
 ```{r}
-log_multipla_BIC <- log_multipla %>% stepAIC(trace = T, direction="both", k=log(51))
+formatar_explicativas_modelo = function(formula) {
+  formula %>%
+      {as.character(.)[3]} %>%
+      str_remove_all("factor\\(|\\)") %>%
+      str_replace_all(":", '*')
+}
+
+log_multipla_BIC_nula = glm(X4~., family=binomial, data=treinamento)
+ajustes_modelos <- log_multipla_BIC %$% tibble(
+  Modelo = 0,
+  "Fórmula" = "Null",
+  Deviance = null.deviance,
+  "g.l." = df.null,
+  BIC = BIC(.),
+  AIC = aic,
+  "Diferença Deviance" = ""
+)
+
+for (step in 0:4) {
+  log_multipla_BIC <- log_multipla %>% stepAIC(
+    trace = T, direction="both", k=log(51), step=step
+  )
+    
+  ajustes_modelos %<>% bind_rows(log_multipla_BIC %$% tibble(
+    Modelo = step+1,
+    "Fórmula" = formatar_explicativas_modelo(formula),
+    Deviance = deviance,
+    "g.l." = df.residual,
+    AIC = aic,
+    BIC = BIC(.),
+    "Diferença Deviance" = str_c(
+      abs(null.deviance - deviance) %>% round(2),
+      " (df = ", df.null - df.residual,")"
+    )
+  ))
+}
+
+
+log_multipla_BIC_mais_simples <- glm(X4 ~ factor(X1) + factor(X2),
+                                     family=binomial,
+                                     data=treinamento)
+
+ajustes_modelos %<>% bind_rows(
+  log_multipla_BIC_mais_simples %$% tibble(
+    Modelo = step+1,
+    "Fórmula" = formatar_explicativas_modelo(formula),
+    Deviance = deviance,
+    "g.l." = df.residual,
+    AIC = aic,
+    BIC = BIC(.),
+    "Diferença Deviance" = str_c(
+      abs(null.deviance - deviance) %>% round(2),
+      " (df = ", df.null - df.residual,")"
+    )
+  )
+)
+
+ajustes_modelos %>%
+  kableExtra::kbl(digits=2,align=c('l','l','c'),booktabs = T,
+                  caption = 'Medidas de ajuste dos modelos') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
 ```
 
 
@@ -457,7 +518,24 @@ modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2), family=binomial, data=
 <!-- Testando deviance para modelo mais complexo -->
 
 ```{r}
-1 - pchisq(modelo_final_mais_complexo$null.deviance - modelo_final_mais_complexo$deviance, length(coef(modelo_final_mais_complexo)))
+list(modelo_final_mais_complexo, modelo_final_complexo, modelo_final_simples) %>%
+  map_df(function(modelo) {
+    modelo %$% tibble(
+      Modelo                 = formatar_explicativas_modelo(formula),
+      "Estatística do teste" = (est = null.deviance - deviance),
+      "g.l."                 = (df = df.null - df.residual),
+      "p-valor"              = ifelse(
+        (pvalor = 1 - pchisq(est, df)) < 0.001,
+        "< 0.001",
+        round(pvalor, 3)
+      )
+    )
+  }) %>%
+  kableExtra::kbl(
+    digits=2,align=c('l','l','c'),booktabs = T,
+    caption = 'Teste de ausência de regressão para cada modelo'
+  ) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
 ```
 
 <!-- Testando deviance para modelo complexo -->
