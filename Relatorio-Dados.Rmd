@@ -420,7 +420,7 @@ log_multipla_AIC <- log_multipla %>% stepAIC(trace = F, direction="both")
 <!-- PRECISO DE ALGUM STEPAIC CORRIGIDO QUE TEM PRINT DOS STEPSSSSS, PORQUE ESSE AIC CANALHA PARA NO MINIMO LOCAL -->
 
 ```{r}
-log_multipla_BIC <- log_multipla %>% stepAIC(trace = F, direction="both", k=log(51))
+log_multipla_BIC <- log_multipla %>% stepAIC(trace = T, direction="both", k=log(51))
 ```
 
 
@@ -440,18 +440,27 @@ O modelo final selecionado pelo BIC considera as 3 variáveis sem interações, 
 
 Assim, considera-se a interpretabilidade como outro fator importante para seleção dos modelos candidatos. Os modelos ajustados são descritos a seguir.
 
-$$\text{logito}[\hat{\pi}(x)] = -2.30638 + 0.03035x_1 + 2.80120x_2 + 3.13819x_3$$
+$$\text{logito}[\hat{\pi}(x)] = -4.59733 + 0.02462x_1 - 2.96608x_2 + 2.89812x_3 + 0.08951x_1x_2$$
+
+$$\text{logito}[\hat{\pi}(x)] = -5.41499 + 0.03323x_1 + 2.80120x_2 + 3.13819x_3$$
 $$\text{logito}[\hat{\pi}(x)] = -2.5888 + 2.7833x_2 + 2.5243x_3$$
 
-Para os dois casos, assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
+Para os dois últimos modelos, assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
 
 
 ```{r}
+modelo_final_mais_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1), family=binomial, data=treinamento)
 modelo_final_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=treinamento)
 modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2), family=binomial, data=treinamento)
 ```
 
 <!-- Testando deviance para modelo mais complexo -->
+
+```{r}
+1 - pchisq(modelo_final_mais_complexo$null.deviance - modelo_final_mais_complexo$deviance, length(coef(modelo_final_mais_complexo)))
+```
+
+<!-- Testando deviance para modelo complexo -->
 
 ```{r}
 1 - pchisq(modelo_final_complexo$null.deviance - modelo_final_complexo$deviance, length(coef(modelo_final_complexo)))
@@ -471,8 +480,29 @@ Dado que o modelo mais complexo se ajusta, deseja-se testar que o modelo mais si
 # teste para modelo mais simples
 1 - pchisq(modelo_final_simples$deviance, modelo_final_simples$df.residual)
 ```
+
 ```{r}
 # teste para modelo mais complexo (com variável continua)
+hoslem_test_resultado <- hoslem.test(modelo_final_mais_complexo$y, fitted(modelo_final_mais_complexo), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>% mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+```{r}
+hoslem_test_resultado
+```
+
+
+```{r}
+# teste para modelo complexo (com variável continua)
 hoslem_test_resultado <- hoslem.test(modelo_final_complexo$y, fitted(modelo_final_complexo), g=10)
 
 hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
@@ -498,6 +528,12 @@ Observe as matrizes de confusão com o limite de decisão definido em 0.5.
 ```{r}
 library(caret)
 
+confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_mais_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
+
+confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_mais_complexo) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
+```
+
+```{r}
 confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
 
 confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_complexo) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
@@ -514,11 +550,15 @@ confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_simples) > .5, 1, 0)
 library(pROC)
 
 invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_complexo)),
+                   fitted(modelo_final_mais_complexo)),
                print.auc = T,
                col = "red", 
-               main = "Curvas ROC: Modelo de 4 parâmetros (red) vs. Modelo de 3 parâmetros"))
+               main = "Curvas ROC"))
 
+invisible(plot(roc(treinamento$X4,
+                   fitted(modelo_final_complexo)),
+               col = "orange", 
+               add = T))
 
 invisible(plot(roc(treinamento$X4,
                    fitted(modelo_final_simples)),
@@ -530,6 +570,15 @@ invisible(plot(roc(treinamento$X4,
 
 
 <!-- ANALISE DE RESIDUOS PADRONIZADOS -->
+
+```{r}
+tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+```
+
 
 ```{r}
 tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
