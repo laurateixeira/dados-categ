@@ -311,6 +311,7 @@ tbl2 %>%
 
 ## 3.2 Modelagem
 
+### 3.2.1 Regressão Logística Simples
 <!-- Regressão Logística Simples -->
 
 Primeiro deseja-se avaliar especificamente o efeito do nível de fosfatase ácida na predição para envolvimento nodal.
@@ -333,7 +334,7 @@ summary(log_simples)
 ```
 
 ```{r}
-confint(fit) # profile likelihood confidence interval
+confint(log_simples) # profile likelihood confidence interval
 ```
 
 
@@ -403,7 +404,7 @@ hoslem_test_resultado
 
 O p-valor indica que existem evidências para rejeitar a hipótese de ajuste do modelo a um nível de significância $\alpha=5\%$.
 
-
+### 3.2.2 Regressão Logística Múltipla
 <!-- Regressão Logística Múltipla -->
 
 Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias e suas interações. Assim, para a seleção das variáveis do modelo considera-se os critérios AIC e BIC, combinando os métodos stepwise "Forward selection" e "Backward elimination".
@@ -425,11 +426,11 @@ log_multipla_BIC <- log_multipla %>% stepAIC(trace = T, direction="both", k=log(
 
 
 ```{r}
-library(aicplot)
+#library(aicplot)
+library(locfit)
+plot(aicplot(log_multipla_AIC,alpha=seq(0.2,1.0,by=0.05)))
 
-plot(aicplot(log_multipla_AIC))
-
-plot(aicplot(log_multipla_BIC))
+plot(aicplot(log_multipla_BIC,alpha=seq(0.2,1.0,by=0.05)))
 ```
 
 
@@ -523,14 +524,25 @@ hoslem_test_resultado
 
 <!-- COMENTAR Matriz de confusão -->
 
-Observe as matrizes de confusão com o limite de decisão definido em 0.5.
+Observe as matrizes de confusão com o limite de decisão definido em 0.5. (CONFERIR SE É PRA FAZER COM O TREINAMENTO OU VALIDAÇÃO, eu acho que é com validação).
 
 ```{r}
 library(caret)
+library(yardstick)
+validacao$X4 <- as.factor(validacao$X4)
+probabs_preditas <- predict(modelo_final_mais_complexo, newdata = validacao,type = "response")
 
-confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_mais_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
+truth_predicted<-data.frame(
+  obs = validacao$X4,
+  pred = factor(as.vector(ifelse(probabs_preditas > .5, 1, 0)))
+)
 
-confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_mais_complexo) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
+conf_mat(truth_predicted, obs, pred) %>% autoplot(type = "heatmap") +
+  scale_fill_gradient(low="#D6EAF8",high = "#2E86C1")
+
+#confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_mais_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
+
+confusionMatrix(truth_predicted$pred, validacao$X4)$overall[1]
 ```
 
 ```{r}
@@ -572,8 +584,19 @@ invisible(plot(roc(treinamento$X4,
 <!-- ANALISE DE RESIDUOS PADRONIZADOS -->
 
 ```{r}
-tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='deviance')) %>%
+res_padronizado_1 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='deviance')) %>%
   ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  labs(title="modelo_final_mais_complexo")+
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+```
+
+
+```{r}
+res_padronizado_2 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  labs(title="modelo_final_complexo")+
   geom_point() +
   geom_hline(yintercept = 0, color="orange") +
   tema
@@ -581,23 +604,54 @@ tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='dev
 
 
 ```{r}
-tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
+res_padronizado_3 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance')) %>%
   ggplot(aes(x=index, y=residuos)) +
   geom_point() +
+  labs(title="modelo_final_simples")+
   geom_hline(yintercept = 0, color="orange") +
   tema
-```
 
 
-```{r}
-tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance')) %>%
-  ggplot(aes(x=index, y=residuos)) +
-  geom_point() +
-  geom_hline(yintercept = 0, color="orange") +
-  tema
+library(cowplot)
+cowplot::plot_grid(res_padronizado_1,res_padronizado_2,
+                        res_padronizado_3,nrow=2)
 ```
 
 <!-- Residuos vs valores ajustados -->
+
+
+### 3.2.3 Modelo final
+
+```{r}
+# formula = X4 ~ X3 + factor(X1) + factor(X2)
+
+modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=amostra)
+
+summary(modelo_no_banco_completo)
+```
+
+
+**(Comentar a interpretação dos parâmetros do modelo)**
+
+
+```{r}
+# matriz de confusao e acuracia
+probabs_preditas <- predict(modelo_no_banco_completo, newdata = amostra,type = "response")
+
+truth_predicted<-data.frame(
+  obs = as.factor(amostra$X4),
+  pred = factor(as.vector(ifelse(probabs_preditas > .5, 1, 0)))
+)
+
+conf_mat(truth_predicted, obs, pred) %>% autoplot(type = "heatmap") +
+  scale_fill_gradient(low="#D6EAF8",high = "#2E86C1")
+
+```
+
+```{r}
+confusionMatrix(truth_predicted$pred, as.factor(amostra$X4))$overall[1]
+```
+
 
 \newpage
 
@@ -606,3 +660,8 @@ tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance'
 \newpage
 
 # 5. Apêndice
+
+```{r, eval=F, echo=T}
+
+```
+
