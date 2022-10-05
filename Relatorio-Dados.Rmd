@@ -664,4 +664,3 @@ confusionMatrix(truth_predicted$pred, as.factor(amostra$X4))$overall[1]
 ```{r, eval=F, echo=T}
 
 ```
-
