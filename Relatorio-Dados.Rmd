@@ -13,14 +13,14 @@ nocite: |
 ```{r pressure, echo=FALSE,out.width = '50%',fig.align='center'}
 knitr::include_graphics("unb.jpg")
 ```
- \Large Universidade de Brasília\\
- IE - Departamento de Estatística
+\Large Universidade de Brasília\\
+IE - Departamento de Estatística
 \end{center} 
- \vskip 12em
+\vskip 12em
 \begin{center}
- \Large \textbf{Trabalho Final - Análise de Dados Categorizados}
- \par
- \vskip 7em
+\Large \textbf{Trabalho Final - Análise de Dados Categorizados}
+\par
+\vskip 7em
 \end{center}
 \setlength{\baselineskip}{.5cm}
 \small \textbf{}
@@ -51,10 +51,10 @@ Outubro de 2022
 
 ```{r setup, include=FALSE,warning=FALSE,message=FALSE}
 knitr::opts_chunk$set(
-	echo = FALSE,
-	message = FALSE,
-	warning = FALSE,
-	fig.align = 'center'
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = 'center'
 )
 ```
 
@@ -64,7 +64,6 @@ knitr::opts_chunk$set(
 No contexto de pacientes que desenvolvem câncer, é de suma importância, para se decidir qual tratamento utilizar, saber se o câncer já se espalhou para os linfonodos próximos. Tal condição é denominada envolvimento nodal. Tendo isso em vista, foi feito um estudo com coleta de variáveis pré-operatórias de pacientes com câncer de próstata, assim como se desenvolveram ou não o quadro de envolvimento nodal. 
 
 Desta forma, o presente estudo busca elucidar quais fatores impactam na probabilidade de um determinado paciente, que desenvolveu câncer de próstata, ter envolvimento nodal, assim como possibilitar a predição do quadro de envolvimento nodal em futuros pacientes. Para entender quais variáveis são importantes para a predição e de que forma elas estão relacionadas, será feito um estudo exploratório, seguido de uma análise inferencial por meio de modelos de regressão logística.
-
 
 \newpage
 
@@ -84,26 +83,30 @@ Com o intuito de apresentar e compreender as variáveis presentes na amostra, se
 
 ```{r}
 # Carregar os dados
-library(xlsx)
+library(readxl)
 library(tidyverse)
-dados <- read.xlsx(file="/home/lauratei/UNB/DADOS/Trabalho/Amostra_g06.xlsx",
-                   sheetName = "Amostra_g06")
+library(magrittr)
+setwd(getwd())
+
+amostra <- read_xlsx(path="Amostra_g06.xlsx",
+                     sheet = "Amostra_g06")
 
 # Seleciona a amostra n=51
 set.seed(12345)
-rows_index <- sample(1:nrow(dados),51)
-amostra <- dados[rows_index,]
+rows_index <- sample(1:nrow(amostra),51)
+treinamento <- amostra[rows_index,]
+validacao <- amostra[-rows_index,]
 
 #Define o tema dos gráficos
 tema <- theme_bw()+
-theme(axis.title.y=element_text(colour="black", size=14),
-axis.title.x = element_text(colour="black", size=14),
-axis.text = element_text(colour = "black", size=14),
-panel.border = element_blank(),
-axis.line = element_line(colour = "black"),
-plot.title = element_text(hjust = 0.5, size=18),
-legend.position = "bottom",
-legend.text=element_text(size=18))
+  theme(axis.title.y=element_text(colour="black", size=14),
+        axis.title.x = element_text(colour="black", size=14),
+        axis.text = element_text(colour = "black", size=14),
+        panel.border = element_blank(),
+        axis.line = element_line(colour = "black"),
+        plot.title = element_text(hjust = 0.5, size=18),
+        legend.position = "bottom",
+        legend.text=element_text(size=18))
 
 ```
 
@@ -111,15 +114,15 @@ legend.text=element_text(size=18))
 ### 3.1.1 Análises Univariadas
 
 #### 3.1.1.1 Variáveis Explicativas
- 
- 
+
+
 O resultado da radiografia, variável qualitativa nominal, está representada no gráfico abaixo.
 
 ```{r, fig.width=8,out.width = '80%'}
 # X1 - Resultado da radiografia
 # 0 – negativo 1 – positivo
 
-Fr <- table(dados$X1)
+Fr <- table(amostra$X1)
 Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
 colnames(Pr)<-c("Var1","Pr" )
 comp <- merge(Fr,Pr, by= "Var1" )
@@ -128,20 +131,20 @@ comp$Var1 <- c("Negativo","Positivo")
 
 # Grafico barras
 ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
-geom_bar(stat="identity",fill="#6E6DB8")+
-geom_text(vjust=-0.5,size=4)+
-labs(x="Resultado da radiografia",y="Frequência Absoluta")+
-tema
+  geom_bar(stat="identity",fill="#6E6DB8")+
+  geom_text(vjust=-0.5,size=4)+
+  labs(x="Resultado da radiografia",y="Frequência Absoluta")+
+  tema
 
 ```
 
-A maioria dos pacientes amostrados (cerca de 71%) apresentou o resultado da radiografia negativo. Em relação ao estágio do tumor, variável qualitativa ordinal, observa-se o seguinte gráfico de barras. 
+A maioria dos pacientes amostrados (cerca de 71%) apresentou o resultado da radiografia negativo. Em relação ao estágio do tumor, variável qualitativa ordinal, observa-se o seguinte gráfico de barras.
 
 
 ```{r, fig.width=8,out.width = '80%'}
 # X2 - Estágio do tumor
 # 0 – menos grave ou 1 – mais grave
-Fr <- table(dados$X2)
+Fr <- table(amostra$X2)
 Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
 colnames(Pr)<-c("Var1","Pr" )
 comp <- merge(Fr,Pr, by= "Var1" )
@@ -150,40 +153,41 @@ comp$Var1 <- c("Menos grave","Mais grave")
 
 # Grafico barras
 ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
-geom_bar(stat="identity",fill="#6E6DB8")+
-geom_text(vjust=-0.5,size=4)+
-labs(x="Estágio do tumor",y="Frequência Absoluta")+
-tema
+  geom_bar(stat="identity",fill="#6E6DB8")+
+  geom_text(vjust=-0.5,size=4)+
+  labs(x="Estágio do tumor",y="Frequência Absoluta")+
+  tema
 
 ```
 
 
-Cerca de 54% dos indivíduos possui um estágio de tumor mais grave, enquanto 46% um estágio menos grave. A análise do nível de fosfatase ácida está apresentada a seguir. 
+Cerca de 54% dos indivíduos possui um estágio de tumor mais grave, enquanto 46% um estágio menos grave. A análise do nível de fosfatase ácida está apresentada a seguir.
+
 
 ```{r, fig.width=8,out.width = '80%'}
 # X3 - Nível de fosfatase ácida
 
 # Boxplot
 
-ggplot(dados,aes(x=factor(""),y=X3))+
-geom_boxplot(fill=c("#6E6DB8"),width=0.5)+
-guides(fill=FALSE)+
-stat_summary(fun.y="mean",geom="point",shape=23,size=3,
-fill="white")+
-labs(x="",y="Nível de fosfatase ácida")+
-tema
+ggplot(amostra, aes(x=factor(""), y=X3)) +
+  geom_boxplot(fill=c("#6E6DB8"),width=0.5) +
+  guides(fill=FALSE) +
+  stat_summary(fun.y="mean",geom="point",shape=23,size=3,
+               fill="white") +
+  labs(x="",y="Nível de fosfatase ácida") +
+  tema
 ```
 
 ```{r}
 # Tabela medidas resumo
 library(kableExtra)
 
-summaryX3 <- summary(dados$X3)
+summaryX3 <- summary(amostra$X3)
 
 tbl1 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
                                    "Mediana","Média","3º Quartil",
                                    "Máximo","Desvio Padrão"),
-                   "Valor"=c(summaryX3,sd(dados$X3)),
+                   "Valor"=c(summaryX3,sd(amostra$X3)),
                    check.names = F)
 
 rownames(tbl1)<-NULL
@@ -195,7 +199,7 @@ tbl1 %>%
 
 ```
 
-O nível de fosfatase ácida é de, em média, 69, um valor próximo da mediana (61,5), mas que foi um pouco deslocado por conta de alguns pontos discrepantes (*outliers*) presentes na amostra, cujos valores são 136, 137, 186 e 187. Portanto, de forma geral, pode-se dizer que os valores de fosfatase ácida estão distribuídos de forma assimétrica à direita e com um valor de variância que não é muito alto, o que pode ser visto pelo seu coeficiente de variação de 42%. 
+O nível de fosfatase ácida é de, em média, 69, um valor próximo da mediana (61,5), mas que foi um pouco deslocado por conta de alguns pontos discrepantes (*outliers*) presentes na amostra, cujos valores são 136, 137, 186 e 187. Portanto, de forma geral, pode-se dizer que os valores de fosfatase ácida estão distribuídos de forma assimétrica à direita e com um valor de variância que não é muito alto, o que pode ser visto pelo seu coeficiente de variação de 42%.
 
 Por fim, a variável resposta do estudo, o envolvimento nodal, é apresentada na seção seguinte.
 
@@ -206,7 +210,7 @@ Por fim, a variável resposta do estudo, o envolvimento nodal, é apresentada na
 # X4 - Envolvimento nodal
 # 0 – sim 1 – não
 
-Fr <- table(dados$X4)
+Fr <- table(amostra$X4)
 Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
 colnames(Pr)<-c("Var1","Pr" )
 comp <- merge(Fr,Pr, by= "Var1" )
@@ -215,10 +219,10 @@ comp$Var1 <- c("Sim","Não")
 
 # Grafico barras
 ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
-geom_bar(stat="identity",fill="#6E6DB8")+
-geom_text(vjust=-0.5,size=4)+
-labs(x="Envolvimento nodal",y="Frequência Absoluta")+
-tema
+  geom_bar(stat="identity",fill="#6E6DB8")+
+  geom_text(vjust=-0.5,size=4)+
+  labs(x="Envolvimento nodal",y="Frequência Absoluta")+
+  tema
 
 ```
 
@@ -231,9 +235,9 @@ A primeira análise bivariada busca compreender a relação entre o resultado da
 ```{r}
 library(gmodels)
 library(epitab)
-# X1 e X2 vs X4
 
-tbl_contingencia<-dados
+# X1 e X2 vs X4
+tbl_contingencia<-amostra
 tbl_contingencia$X1 <- ifelse(tbl_contingencia$X1==0,"Negativo","Positivo")
 tbl_contingencia$X4 <- ifelse(tbl_contingencia$X4==0,"Sim","Nao")
 tbl_contingencia$X2 <- ifelse(tbl_contingencia$X2==0,"Menos grave","Mais grave")
@@ -241,16 +245,19 @@ tbl_contingencia$X4 <- factor(tbl_contingencia$X4,levels=c("Sim","Nao"))
 tbl_contingencia$X1 <-factor(tbl_contingencia$X1,levels=c("Negativo","Positivo"))
 tbl_contingencia$X2 <- factor(tbl_contingencia$X2,levels=c("Menos grave","Mais grave"))
 
-
 # tabela contingencia (formato de saída do SAS)
-contingency_table(independents = list("Resultado radiografia"="X1","Estagio do tumor"="X2"),
-                  outcomes = list("Envolvimento nodal"="X4"),
-                  crosstab_funcs = list(freq()),
-                  row_funcs = list("Odds"=odds_ratio("X4")),
-                  data=tbl_contingencia) %>%
-    neat_table(format = 'latex',booktabs=TRUE,caption="Frequências de envolvimento nodal por resultado da radiografia e estágio do tumor") %>%
-    kableExtra::kable_classic(latex_options = "HOLD_position")
-
+contingency_table(
+  independents = list("Resultado radiografia"="X1","Estagio do tumor"="X2"),
+  outcomes = list("Envolvimento nodal"="X4"),
+  crosstab_funcs = list(freq()),
+  row_funcs = list("Odds"=odds_ratio("X4")),
+  data=tbl_contingencia) %>%
+  neat_table(
+    format = 'latex',
+    booktabs=TRUE,
+    caption="Frequências de envolvimento nodal por resultado da radiografia e estágio do tumor"
+  ) %>%
+  kableExtra::kable_classic(latex_options = "HOLD_position")
 ```
 
 Nota-se pela tabela de contingência que a grande maioria dos pacientes com envolvimento nodal tiveram o resultado da radiografia negativo (86,7%). Por outro lado, dentre os indivíduos sem envolvimento nodal, 52,4% teve o resultado da radiografia positivo. Esses percentuais indicam uma possível associação entre as variáveis, o que também fica evidenciado pela razão de chances: a chance de um paciente com resultado da radiografia negativo ter envolvimento nodal é 7,15 vezes a chance de um paciente com resultado da radiografia positivo.
@@ -259,79 +266,74 @@ Já em relação ao estágio do tumor, a tabela revela que dentre os pacientes c
 
 Assim, para confirmar a relação entre essas variáveis, foi feito o teste qui-quadrado de independência:
 
-
 ```{r}
+# teste correlação 
 # testes de associacao qui-quadrado  
-bivariadas<-dados
+bivariadas<-amostra
 names(bivariadas)<-c("ID","Resultado da radiografia",
                      "Estágio do tumor","Nível de fosfatase ácida",
                      "Envolvimento nodal")
-
 bivariadas$`Envolvimento nodal`<- as.factor(bivariadas$`Envolvimento nodal`)
-
 teste_radiog <- chisq.test(bivariadas$`Resultado da radiografia`,
                            bivariadas$`Envolvimento nodal`)
-
 teste_tumor <- chisq.test(bivariadas$`Estágio do tumor`,
                           bivariadas$`Envolvimento nodal`)
 # tabela p-valores
 # teste_radiog$p.value<0.0001 #TRUE
 # teste_tumor$p.value<0.0001  #TRUE
-tbl_teste <- data.frame("Variável"=c("Resultado da radiografia",
-                     "Estágio do tumor"),
-                     "Estatística do teste"=c(teste_radiog$statistic,
-                                              teste_tumor$statistic),
-                     "Graus de liberdade"=c(teste_radiog$parameter,
-                                            teste_tumor$parameter),
-                     "P-valor"=c("<0.0001","<0.0001"),
-                     check.names = F)
-
+tbl_teste <- data.frame(
+  "Variável"=c("Resultado da radiografia", "Estágio do tumor"),
+  "Estatística do teste"=c(teste_radiog$statistic,teste_tumor$statistic),
+  "Graus de liberdade"=c(teste_radiog$parameter, teste_tumor$parameter),
+  "P-valor"=c("<0.0001","<0.0001"),
+  check.names = F
+)
 
 tbl_teste %>%
-  kableExtra::kbl(.,digits=3,align=c('l','c','c','c'),booktabs = T,
-                  caption = 'Testes Qui-Quadrado de independência com envolvimento nodal') %>% 
+  kableExtra::kbl(
+    .,digits=3,align=c('l','c','c','c'),booktabs = T,
+    caption = 'Testes Qui-Quadrado de independência com envolvimento nodal') %>% 
   kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
-
 ```
 
 Tendo em vista o baixo p-valor, rejeita-se a hipótese nula de independência entre o envolvimento nodal e o resultado da radiografia, assim como também rejeitamos a independência entre o envolvimento nodal e o estágio do tumor.
 
 A seguir, obtém-se os gráficos e tabelas para análise da relação entre o nível de fosfatase ácida e o envolvimento nodal.
 
-```{r, fig.width=8,out.width = '80%'}
+
+```{r}
 # X3 vs X4
-bivariadas$`Envolvimento nodal`<- ifelse(bivariadas$`Envolvimento nodal`==0,"Sim","Não")
+bivariadas$`Envolvimento nodal`<- ifelse(
+  bivariadas$`Envolvimento nodal`==0,
+  "Sim",
+  "Não"
+)
 
 #Boxplot
-ggplot(bivariadas,aes(x=`Envolvimento nodal`,y=`Nível de fosfatase ácida`))+
-geom_boxplot(fill=c("#6E6DB8"),width=0.5)+
-stat_summary(fun.y="mean",geom="point",shape=23,size=3,
-fill="white")+
-labs(x="Envolvimento nodal",y="Nível de fosfatase ácida")+
-tema
+ggplot(bivariadas,aes(x=`Envolvimento nodal`,y=`Nível de fosfatase ácida`)) +
+  geom_boxplot(fill=c("#6E6DB8"),width=0.5) +
+  stat_summary(fun.y="mean",geom="point",shape=23,size=3,fill="white") +
+  labs(x="Envolvimento nodal",y="Nível de fosfatase ácida") +
+  tema
 
-```
-```{r}
 # Tabela X3 vs X4
 library(magrittr)
-env_nodal <- dados %>% filter(X4==0)
-sem_env_nodal <- dados %>% filter(X4==1)
-
+env_nodal <- amostra %>% filter(X4==0)
+sem_env_nodal <- amostra %>% filter(X4==1)
 tbl2 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
                                    "Mediana","Média","3º Quartil",
                                    "Máximo","Desvio Padrão"),
                    "Sem envolvimento nodal"=c(summary(sem_env_nodal$X3),sd(sem_env_nodal$X3)),
                    "Com envolvimento nodal"=c(summary(env_nodal$X3),sd(env_nodal$X3)),
                    check.names = F)
-
 rownames(tbl2)<-NULL
 
 tbl2 %>%
-  kableExtra::kbl(.,digits=2,align=c('l','c','c'),booktabs = T,
-                  caption = 'Medidas resumo da fosfatase ácida por envolvimento nodal') %>% 
+  kableExtra::kbl(
+    .,digits=2,align=c('l','c','c'),booktabs = T,
+    caption = 'Medidas resumo da fosfatase ácida por envolvimento nodal'
+  ) %>% 
   kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
-
-
 ```
 
 Observamos que o nível de fosfatase é, em média, maior entre os pacientes sem envolvimento nodal. Além disso, os valores de mediana do nível de fosfatase também são consideravelmente maiores no grupo sem envolvimento nodal. Portanto, a princípio, não devemos descartar nenhuma das variáveis pré-operatórias, pois todas aparentam ter uma relação com o envolvimento nodal dos indivíduos estudados.
@@ -341,6 +343,368 @@ Observamos que o nível de fosfatase é, em média, maior entre os pacientes sem
 
 ## 3.2 Modelagem
 
+### 3.2.1 Regressão Logística Simples
+<!-- Regressão Logística Simples -->
+
+Primeiro deseja-se avaliar especificamente o efeito do nível de fosfatase ácida na predição para envolvimento nodal.
+
+```{r}
+treinamento %>% ggplot(aes(x=X3, y=X4)) + 
+  geom_point() + 
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"), 
+              se = FALSE, color="#6E6DB8", size=0.6) +
+  labs(y="Envolvimento nodal",x="Nível de fosfatase ácida") +
+  tema
+```
+
+O envolvimento nodal ocorre com maior frequência em níveis de fosfatase ácida mais baixos, mas apresenta alguns valores extremos como indicados na seção anterior. Como o envolvimento nodal assume apenas os valores 0 e 1, é difícil determinar a partir do gráfico de dispersão se o modelo é apropriado.
+
+```{r}
+log_simples <- glm(X4 ~ X3, family=binomial, data=treinamento)
+summary(log_simples)
+```
+
+
+O modelo de regressão logística ajustado para a probabilidade $\pi(x)$ do paciente *não* apresentar envolvimento nodal em câncer de próstata é descrito a seguir.
+
+$$\text{logito}[\hat{\pi}(x)] = -2.30638 + 0.03035x$$
+Observe que para o teste de razão de verossimilhança rejeitamos a hipótese de independência da probabilidade de não envolvimento nodal em relação ao nível de fosfatase ácida ($\hat{\beta}_1 = 0$), para um nível de significância $\alpha=5\%$. Assim também, a estatística de razão de verossimilhança é de 5.605 e o p-valor aproximadamente 0.018, isto é, existem evidências de que a probabilidade não é idêntica para todos os níveis de fosfatase ácida, a um nível de significância $\alpha=5\%$.
+
+Note que, $\hat{\beta}_1$ é positivo, então a probabilidade estimada é maior quanto maior o nível de fosfatase ácida. No nível mínimo, 40 na amostra selecionada para o ajuste, a probabilidade estimada de não envolvimento nodal é de 0.251 e no nível máximo é de 0.967. Assim, o efeito da fosfatase ácida é relativamente forte considerando a diferença entre os valores estimados para o mínimo e o máximo da amostra.
+
+No ponto em que cada resultado tem 50% de probabilidade, o nível de fosfatase ácida é de 76 aproximadamente. Por outro lado, para o valor médio de 70.47, a probabilidade é de 0.458. 
+
+Por último, a chance estimada para $\hat{\beta}_1$ é multiplicada por 1.03 para cada unidade adicionada de fosfatase ácida, ou seja, um aumento de 3%.
+
+
+```{r}
+lp <- predict(log_simples, newdata=validacao, se.fit=TRUE) # preditor linear
+prob_preditas <- exp(lp$fit)/(1 + exp(lp$fit))
+LB <- lp$fit - qnorm(0.975)*lp$se.fit
+UB <- lp$fit + qnorm(0.975)*lp$se.fit
+LB_p <- exp(LB)/(1 + exp(LB)) 
+UB_p <- exp(UB)/(1 + exp(UB))
+
+tabela_preditos <- tibble(X3=validacao$X3, prob_preditas = prob_preditas, LB_p = LB_p, UB_p = UB_p)
+```
+
+```{r}
+validacao %>% ggplot(aes(x=X3, y=X4)) + 
+  geom_point() +
+  geom_line(data=tabela_preditos, 
+            aes(x=X3, y=prob_preditas), 
+            color="#6E6DB8", size=0.6) +
+  geom_line(data=tabela_preditos,
+            aes(x=X3, y=LB_p), 
+            color="#F1A661", size=0.6,
+            linetype = "dashed") +
+  geom_line(data=tabela_preditos, 
+            aes(x=X3, y=UB_p), 
+            color="#F1A661", size=0.6,
+            linetype = "dashed") +
+  labs(y="Envolvimento nodal",x="Nível de fosfatase ácida") +
+  tema
+```
+
+Verifica-se o ajuste por meio do teste de Hosmer-Lemeshow.
+
+```{r}
+library(kableExtra)
+library(ResourceSelection)
+hoslem_test_resultado <- hoslem.test(log_simples$y, fitted(log_simples), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+```{r}
+hoslem_test_resultado
+```
+
+O p-valor indica que existem evidências para rejeitar a hipótese de ajuste do modelo a um nível de significância $\alpha=5\%$.
+
+### 3.2.2 Regressão Logística Múltipla
+
+<!-- Regressão Logística Múltipla -->
+
+Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias e suas interações. Neste sentido, para a seleção das variáveis do modelo considera-se os critérios AIC e BIC, combinando os métodos stepwise "Forward selection" e "Backward elimination".
+
+```{r}
+log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1) + X3*factor(X2) + factor(X1)*factor(X2) +  X3*factor(X1)*factor(X2), family=binomial, data=treinamento)
+```
+
+```{r}
+library(MASS)
+log_multipla_AIC <- log_multipla %>% stepAIC(trace = F, direction="both")
+```
+
+```{r}
+library(magrittr)
+formatar_explicativas_modelo = function(formula) {
+  formula %>%
+      {as.character(.)[3]} %>%
+      str_remove_all("factor\\(|\\)") %>%
+      str_replace_all(":", '*')
+}
+log_multipla_BIC_nula = glm(X4~., family=binomial, data=treinamento)
+
+ajustes_modelos <- log_multipla_BIC_nula %$% tibble(
+  Modelo = 0,
+  "Fórmula" = "Null",
+  Deviance = null.deviance,
+  "g.l." = "",
+  BIC = BIC(.),
+  AIC = aic,
+  "P-valor" = "",
+)
+for (step in 0:4) {
+  log_multipla_BIC <- log_multipla %>% stepAIC(
+    trace = F, direction="both", k=log(51), step=step
+  )
+    
+  ajustes_modelos %<>% bind_rows(log_multipla_BIC %$% tibble(
+    Modelo = step+1,
+    "Fórmula" = formatar_explicativas_modelo(formula),
+    Deviance = deviance,
+    "g.l." = (df.null - df.residual) %>% as.character,
+    AIC = aic,
+    BIC = BIC(.),
+    "P-valor" = ifelse(1 - pchisq((null.deviance - deviance), (df.null - df.residual)) < 0.001,
+                                "< 0.001",
+                                round(pvalor, 3)),
+  )
+)
+}
+log_multipla_BIC_mais_simples <- glm(X4 ~ factor(X1) + factor(X2),
+                                     family=binomial,
+                                     data=treinamento)
+ajustes_modelos %<>% bind_rows(
+  log_multipla_BIC_mais_simples %$% tibble(
+    Modelo = step+1,
+    "Fórmula" = formatar_explicativas_modelo(formula),
+    Deviance = deviance,
+    "g.l." = (df.null - df.residual) %>% as.character,
+    AIC = aic,
+    BIC = BIC(.),
+    "P-valor" = ifelse(1 - pchisq((null.deviance - deviance), (df.null - df.residual)) < 0.001,
+                                "< 0.001",
+                                round(pvalor, 3)),
+  )
+)
+ajustes_modelos %>%
+  kableExtra::kbl(digits=2,align=c('l','l','c'),booktabs = T,
+                  caption = 'Medidas de ajuste dos modelos') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+Os métodos de seleção automática de variáveis, AIC e BIC, identificaram o modelo 5 como mais adequado. O resto dos modelos foram apresentados para facilitar a comparação e justificar a seleção dos 3 modelos candidatos. O modelo 6, que tem o menor número de parâmetros e que apresentou valores ligeriamente superiores de AIC e BIC quando comparado com o modelo 5, foi considerado pelo critério da interpretabilidade.
+
+Como todos os modelos são signifcativos para o teste de ausência de regressão, então selecionamos os dois que tiveram melhor desempenho para o AIC e o BIC (modelo 4 e 5). Além disso, considera-se a interpretabilidade como outro fator importante para seleção dos modelos e, portanto, o modelo 6 também é separado como candidato. Assim, Os modelos ajustados são descritos a seguir.
+
+$$\text{logito}[\hat{\pi}(x)] = -4.59733 + 0.02462x_1 - 2.96608x_2 + 2.89812x_3 + 0.08951x_1x_2$$
+
+$$\text{logito}[\hat{\pi}(x)] = -5.41499 + 0.03323x_1 + 2.80120x_2 + 3.13819x_3$$
+$$\text{logito}[\hat{\pi}(x)] = -2.5888 + 2.7833x_2 + 2.5243x_3$$
+
+Para os dois últimos modelos, assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
+
+
+```{r}
+modelo_final_mais_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1), family=binomial, data=treinamento)
+modelo_final_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=treinamento)
+modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2), family=binomial, data=treinamento)
+```
+
+<!-- TESTE DE AJUSTAMENTO -->
+
+A continuação calculamos os testes de ajuste do modelo. Note que, para o modelo com variável quantitativa contínua utilizamos o teste de Hosmer-Lemeshow.
+
+O teste indica que existem evidências de ajustamento para os modelos de 3 e 4 parâmetros (p-valor de 0.7014 e 0.6480, respectivamente). Por outro lado, para o modelo mais complexo observamos pior desempenho no ajuste (pvalor = 0.106).
+
+A continuação apresentamos as tabelas para os valores observados e esperados considerados no teste de Hosmer-Lemeshow.
+
+```{r}
+library(ResourceSelection)
+
+# teste para modelo mais complexo (com variável continua)
+hoslem_test_resultado <- hoslem.test(modelo_final_mais_complexo$y, fitted(modelo_final_mais_complexo), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>% mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+# ```{r}
+# hoslem_test_resultado$p.value
+# ```
+
+
+```{r}
+# teste para modelo complexo (com variável continua)
+hoslem_test_resultado <- hoslem.test(modelo_final_complexo$y, fitted(modelo_final_complexo), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>% mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+<!-- COMENTAR Matriz de confusão -->
+
+O desempenho do poder preditivo é analisado a partir da acurácia dos modelos e o gráfico de curvas ROC, considerando banco de validação. O limite de decisão definido é de 0.5.
+
+```{r}
+tabela_acuracia <- tibble(modelo = rep(NA,3), acuracia = rep(NA,3))
+
+probabs_preditas <- list(predict(modelo_final_mais_complexo, newdata = validacao,type = "response"),
+                         predict(modelo_final_complexo, newdata = validacao,type = "response"),
+                         predict(modelo_final_simples, newdata = validacao,type = "response"))
+
+
+modelos <- c(formatar_explicativas_modelo(modelo_final_mais_complexo$formula),
+             formatar_explicativas_modelo(modelo_final_complexo$formula),
+             formatar_explicativas_modelo(modelo_final_simples$formula))
+
+validacao$X4 <- as.factor(validacao$X4)
+
+for(i in 1:3){
+
+truth_predicted <- data.frame(
+  obs = validacao$X4,
+  pred = factor(as.vector(ifelse(probabs_preditas[[i]] > .5, 1, 0)))
+)
+
+tabela_acuracia$modelo[i] <- modelos[i]
+tabela_acuracia$acuracia[i] <-confusionMatrix(truth_predicted$pred, validacao$X4)$overall[1]
+}
+
+tabela_acuracia %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Acurácia observada nos modelos candidatos',
+                  col.names = c("Modelo","Acurácia")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+
+
+
+```{r}
+library(pROC)
+
+invisible(plot(roc(validacao$X4,
+                   predict(modelo_final_mais_complexo, newdata = validacao,type = "response")),
+               print.auc = T,
+               col = "red", 
+               main = "Curvas ROC"))
+
+invisible(plot(roc(validacao$X4,
+                   predict(modelo_final_complexo, newdata = validacao,type = "response")),
+               col = "orange", 
+               add = T))
+
+invisible(plot(roc(validacao$X4,
+                   predict(modelo_final_simples, newdata = validacao,type = "response")),
+               col = "blue", 
+               add = T))
+```
+
+<!-- O modelo mais complexo é superior (AUC é maior) COMENTAR  -->
+
+Para um valor particular de especificidade, o melhor poder preditivo corresponde a uma maior sensibilidade, isto significa, quanto maior a área melhor o poder preditivo. Assim, o modelo com 4 parâmetros apresenta o melhor desempenho se considerarmos o AUC de 0.84, seguido do modelo com uma interação e por último o modelo de 3 parâmetros.
+
+Os resultados observados na curva ROC são condizentes com a tabela de valores da acurácia para cada modelo.
+
+<!-- ANALISE DE RESIDUOS PADRONIZADOS -->
+
+```{r}
+res_padronizado_1 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  labs(title="modelo_final_mais_complexo")+
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+```
+
+
+```{r}
+res_padronizado_2 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  labs(title="modelo_final_complexo")+
+  geom_point() +
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+```
+
+
+```{r}
+res_padronizado_3 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance')) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  labs(title="modelo_final_simples")+
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+
+
+library(cowplot)
+cowplot::plot_grid(res_padronizado_1,res_padronizado_2,
+                   res_padronizado_3,nrow=2)
+```
+
+<!-- Residuos vs valores ajustados -->
+
+
+### 3.2.3 Modelo final
+
+```{r}
+# formula = X4 ~ X3 + factor(X1) + factor(X2)
+
+modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=amostra)
+
+summary(modelo_no_banco_completo)
+```
+
+
+**(Comentar a interpretação dos parâmetros do modelo)**
+
+
+```{r}
+# matriz de confusao e acuracia
+probabs_preditas <- predict(modelo_no_banco_completo, newdata = amostra,type = "response")
+
+truth_predicted<-data.frame(
+  obs = as.factor(amostra$X4),
+  pred = factor(as.vector(ifelse(probabs_preditas > .5, 1, 0)))
+)
+
+conf_mat(truth_predicted, obs, pred) %>% autoplot(type = "heatmap") +
+  scale_fill_gradient(low="#D6EAF8",high = "#2E86C1")
+
+```
+
+```{r}
+confusionMatrix(truth_predicted$pred, as.factor(amostra$X4))$overall[1]
+```
+
+
 \newpage
 
 # 4. Conclusão
@@ -348,3 +712,7 @@ Observamos que o nível de fosfatase é, em média, maior entre os pacientes sem
 \newpage
 
 # 5. Apêndice
+
+```{r, eval=F, echo=T}
+
+```
