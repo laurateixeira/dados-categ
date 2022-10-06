@@ -63,7 +63,7 @@ knitr::opts_chunk$set(
 
 No contexto de pacientes que desenvolvem câncer, é de suma importância, para se decidir qual tratamento utilizar, saber se o câncer já se espalhou para os linfonodos próximos. Tal condição é denominada envolvimento nodal. Tendo isso em vista, foi feito um estudo com coleta de variáveis pré-operatórias de pacientes com câncer de próstata, assim como se desenvolveram ou não o quadro de envolvimento nodal. 
 
-Desta forma, o presente estudo busca elucidar quais fatores impactam na probabilidade de um determinado paciente, que desenvolveu câncer de próstata, ter envolvimento nodal, assim como possibilitar a predição do quadro de envolvimento nodal em futuros pacientes. Para entender quais variáveis são importantes para a predição e de que forma elas estão relacionadas, será feito um estudo exploratório, seguido de uma análise inferencial por meio de modelos de regressão logística.
+Desta forma, o presente estudo busca elucidar quais fatores impactam na probabilidade de um determinado paciente, que desenvolveu câncer de próstata, não ter envolvimento nodal, assim como possibilitar a predição em futuros pacientes. Para entender quais variáveis são importantes para a predição e de que forma elas estão relacionadas, será feito um estudo exploratório, seguido de uma análise inferencial por meio de modelos de regressão logística.
 
 \newpage
 
