@@ -457,7 +457,9 @@ formatar_explicativas_modelo = function(formula) {
   formula %>%
       {as.character(.)[3]} %>%
       str_remove_all("factor\\(|\\)") %>%
-      str_replace_all(":", '*')
+      str_replace_all(":", '*') %>%
+    str_replace_all(" \\* ","*")%>%
+    str_replace_all(" \\+ ","+")
 }
 log_multipla_BIC_nula = glm(X4~., family=binomial, data=treinamento)
 
@@ -505,10 +507,11 @@ ajustes_modelos %<>% bind_rows(
     )
   )
 )
+ajustes_modelos$Modelo <- 0:6
 ajustes_modelos %>%
-  kableExtra::kbl(digits=2,align=c('l','l','c'),booktabs = T,
+  kableExtra::kbl(digits=2,align=c('l','l','l','l','l','l','l'),booktabs = T,
                   caption = 'Medidas de ajuste dos modelos') %>% 
-  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+  kableExtra::kable_classic(full_width=F,latex_options = "HOLD_position")
 ```
 
 
@@ -727,40 +730,75 @@ cowplot::plot_grid(res_padronizado_1,res_padronizado_2,
 
 ### 3.2.3 Modelo final
 
+Tendo em vista os valores de acurácia no banco de validação, o gráfico da curva ROC e o critério de parcimônia, ficou clara a escolha pelo modelo com todas as variáveis, sem interações. Tal modelo será ajustado no banco de dados completo, a seguir.
+
 ```{r}
 # formula = X4 ~ X3 + factor(X1) + factor(X2)
-
 modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=amostra)
 
 summary(modelo_no_banco_completo)
 ```
 
+É possível observar, pela saída do modelo final, que rejeitamos a hipótese nula de que os parâmetros do modelo são nulos, para todas as variáveis selecionadas, levando em consideração os baixos p-valores obtidos no teste Z e o nível de significância adotado ($\alpha=5\%$). A interpretação dos coeficientes estimados pode ser vista por meio da tabela abaixo.
 
-**(Comentar a interpretação dos parâmetros do modelo)**
-
-
-```{r}
-# matriz de confusao e acuracia
-probabs_preditas <- predict(modelo_no_banco_completo, newdata = amostra,type = "response")
-
-truth_predicted<-data.frame(
-  obs = as.factor(amostra$X4),
-  pred = factor(as.vector(ifelse(probabs_preditas > .5, 1, 0)))
-)
-
-conf_mat(truth_predicted, obs, pred) %>% autoplot(type = "heatmap") +
-  scale_fill_gradient(low="#D6EAF8",high = "#2E86C1")
-
-```
 
 ```{r}
-confusionMatrix(truth_predicted$pred, as.factor(amostra$X4))$overall[1]
-```
+# Intevalos para os parametros (95%)
 
+z <- qnorm(0.975)
+b1 <- modelo_no_banco_completo$coefficients[3]
+b2 <- modelo_no_banco_completo$coefficients[4]
+b3<- modelo_no_banco_completo$coefficients[2]
+ASE1 <- summary(modelo_no_banco_completo)$coefficients[3,2]
+ASE2 <- summary(modelo_no_banco_completo)$coefficients[4,2]
+ASE3 <- summary(modelo_no_banco_completo)$coefficients[2,2] 
+# b1
+b1_ic <- c(b1-z*ASE1,b1+z*ASE1)
+b1_ic_string <- paste("[",round(b1_ic[1],2),",",round(b1_ic[2],2),"]")
+# b2
+b2_ic <- c(b2-z*ASE2,b2+z*ASE2)
+b2_ic_string <- paste("[",round(b2_ic[1],2),",",round(b2_ic[2],2),"]")
+
+# b3
+b3_ic <- c(b3-z*ASE3,b3+z*ASE3)
+b3_ic_string <- paste("[",round(b3_ic[1],2),",",round(b3_ic[2],2),"]")
+
+
+# Intervalos para odds
+
+odds_b1 <- exp(b1_ic)
+odds_b1_string <- paste("[",round(odds_b1[1],2),",",round(odds_b1[2],2),"]")
+odds_b2 <- exp(b2_ic)
+odds_b2_string <- paste("[",round(odds_b2[1],2),",",round(odds_b2[2],2),"]")
+odds_b3 <- exp(b3_ic)
+odds_b3_string <- paste("[",round(odds_b3[1],2),",",round(odds_b3[2],2),"]")
+
+tbl_intervalos_betas_odds <- data.frame("Coeficiente"=c("Beta 1","Beta 2","Beta 3"),
+                                        "Intervalo do coeficiente"=c(b1_ic_string,
+                                                                     b2_ic_string,
+                                                                     b3_ic_string),
+                                        "Odds"=c(exp(b1),exp(b2),exp(b3)),
+                                        "Intervalo da Odds"=c(odds_b1_string,
+                                                              odds_b2_string,
+                                                              odds_b3_string),
+                                        check.names = F)
+rownames(tbl_intervalos_betas_odds)<-NULL
+tbl_intervalos_betas_odds %>% 
+  kableExtra::kbl(.,digits=3,align=c('l','c','c','c'),booktabs = T,
+                  caption = 'Intervalos de confiança (95\\%) para o modelo final') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+```
+O coeficiente $\hat{\beta_1}$, que acompanha a variável resultado da radiografia, indica que, mantendo todo o restante constante, o resultado positivo representa de 3,67 até 65,7 vezes a chance de **não** ter envolvimento nodal, em comparação com o resultado negativo. Já o coeficiente $\hat{\beta_2}$, que acompanha a variável estágio do tumor, indica que, dado todo o restante constante, o estágio de tumor mais grave representa de 5,64 até 108,5 vezes a chance de **não** ter o quadro de envolvimento nodal, em comparação com o estágio de tumor menos grave. Por fim, o parâmetro $\hat{\beta_3}$, referente ao nível de fosfatase ácida, revela que o incremento de 1 unidade (na escala x100) na fosfatase acarreta em um aumento multiplicativo na chance de **não** ter envolvimento nodal de 1,01 até 1,05, isto é, de 1% até 5%.
 
 \newpage
 
 # 4. Conclusão
+
+O presente estudo propôs identificar fatores que acarretam no envolvimento nodal de pacientes com câncer de próstata, e nas relações desses fatores com a probabilidade de não apresentar envolvimento. Desse modo, as análises exploratórias indicaram que todas as variáveis, resultado da radiografia, estágio do tumor e nível de fosfatase ácida apresentavam algum tipo de relação com a variável resposta. Seguindo para a modelagem, a regressão logística simples (apenas com a fosfatase ácida) se mostrou insatisfatória, não sendo capaz de explicar com êxito o envolvimento nodal dos indivíduos.
+
+Desta forma, foi aplicado o procedimento de regressão logística múltipla, onde todas as variáveis da amostra foram consideradas. A etapa de escolha das variáveis indicou o modelo com todos os fatores (simples, sem interações) como sendo o mais pertinente, dado os valores de AIC, testes de ajustamento, curva ROC e valores de acurácia obtidos por meio da partição do banco que foi destinada para validação. Assim, o modelo escolhido apresentou resultados satisfatórios, e podemos dizer que é capaz de predizer a não ocorrência de envolvimento nodal, dado as variáveis pré-operatorias, com um erro razoável. Certamente o erro de predição poderia ser atenuado por meio de novos estudos, com maior número de indivíduos amostrados e coleta de novas variáveis.
+
+De modo geral, o resultado da radiografia negativo impactou positivamente na probabilidade de haver envolvimento nodal, assim como o estágio de tumor menos grave também parece gerar impacto significativo no aumento dessa probabilidade. Em relação ao nível de fosfatase ácida, apesar de ser maior, em média, em pacientes sem envolvimento nodal, os valores discrepantes presentes no grupo que possui envolvimento nodal podem ter repercurtido e afetado o modelo final. De todo modo, o aumento de uma unidade no nível de fosfatase indicou um aumento multiplicativo na chance de não ter envolvimento nodal de até 5%.
 
 \newpage
 
