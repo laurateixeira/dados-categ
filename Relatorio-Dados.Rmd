@@ -103,7 +103,7 @@ tema <- theme_bw()+
         axis.text = element_text(colour = "black", size=14),
         panel.border = element_blank(),
         axis.line = element_line(colour = "black"),
-        plot.title = element_text(hjust = 0.5, size=18),
+        plot.title = element_text(hjust = 0.5, size=12),
         legend.position = "bottom",
         legend.text=element_text(size=18))
 
@@ -242,7 +242,8 @@ tbl_contingencia$X4 <- ifelse(tbl_contingencia$X4==0,"Sim","Nao")
 tbl_contingencia$X2 <- ifelse(tbl_contingencia$X2==0,"Menos grave","Mais grave")
 tbl_contingencia$X4 <- factor(tbl_contingencia$X4,levels=c("Sim","Nao"))
 tbl_contingencia$X1 <-factor(tbl_contingencia$X1,levels=c("Negativo","Positivo"))
-tbl_contingencia$X2 <- factor(tbl_contingencia$X2,levels=c("Menos grave","Mais grave"))
+tbl_contingencia$X2 <- factor(tbl_contingencia$X2,levels=c("Menos grave",
+                                                           "Mais grave"))
 
 # tabela contingencia (formato de saída do SAS)
 contingency_table(
@@ -322,8 +323,10 @@ sem_env_nodal <- amostra %>% filter(X4==1)
 tbl2 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
                                    "Mediana","Média","3º Quartil",
                                    "Máximo","Desvio Padrão"),
-                   "Sem envolvimento nodal"=c(summary(sem_env_nodal$X3),sd(sem_env_nodal$X3)),
-                   "Com envolvimento nodal"=c(summary(env_nodal$X3),sd(env_nodal$X3)),
+                   "Sem envolvimento nodal"=c(summary(sem_env_nodal$X3),
+                                              sd(sem_env_nodal$X3)),
+                   "Com envolvimento nodal"=c(summary(env_nodal$X3),
+                                              sd(env_nodal$X3)),
                    check.names = F)
 rownames(tbl2)<-NULL
 
@@ -347,7 +350,7 @@ Observamos que o nível de fosfatase é, em média, maior entre os pacientes sem
 
 Primeiro deseja-se avaliar especificamente o efeito do nível de fosfatase ácida na predição para envolvimento nodal.
 
-```{r}
+```{r,fig.width=8,out.width = '80%'}
 treinamento %>% ggplot(aes(x=X3, y=X4)) + 
   geom_point() + 
   geom_smooth(method = "glm", 
@@ -389,7 +392,12 @@ UB <- lp$fit + qnorm(0.975)*lp$se.fit
 LB_p <- exp(LB)/(1 + exp(LB)) 
 UB_p <- exp(UB)/(1 + exp(UB))
 
-tabela_preditos <- tibble(X3=validacao$X3, prob_preditas = prob_preditas, LB_p = LB_p, UB_p = UB_p)
+tabela_preditos <- tibble(
+  X3=validacao$X3,
+  prob_preditas = prob_preditas,
+  LB_p = LB_p,
+  UB_p = UB_p
+)
 ```
 
 ```{r}
@@ -436,12 +444,16 @@ hoslem_test_resultado
 O p-valor indica que existem evidências para rejeitar a hipótese de ajuste do modelo a um nível de significância $\alpha=5\%$.
 
 ### 3.2.2 Regressão Logística Múltipla
+
 <!-- Regressão Logística Múltipla -->
 
-Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias e suas interações. Assim, para a seleção das variáveis do modelo considera-se os critérios AIC e BIC, combinando os métodos stepwise "Forward selection" e "Backward elimination".
+Na segunda etapa do estudo considera-se, além da variável nível de fosfatase ácida, as outras variáveis pré-operatórias e suas interações. Neste sentido, para a seleção das variáveis do modelo considera-se os critérios AIC e BIC, combinando os métodos stepwise "Forward selection" e "Backward elimination".
 
 ```{r}
-log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1) + X3*factor(X2) + factor(X1)*factor(X2) +  X3*factor(X1)*factor(X2), family=binomial, data=treinamento)
+log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2) +
+                      X3*factor(X1) + X3*factor(X2) + factor(X1)*factor(X2) +
+                      X3*factor(X1)*factor(X2),
+                    family=binomial, data=treinamento)
 ```
 
 ```{r}
@@ -455,9 +467,9 @@ log_multipla_AIC <- log_multipla %>% stepAIC(trace = F, direction="both")
 library(magrittr)
 formatar_explicativas_modelo = function(formula) {
   formula %>%
-      {as.character(.)[3]} %>%
-      str_remove_all("factor\\(|\\)") %>%
-      str_replace_all(":", '*') %>%
+    {as.character(.)[3]} %>%
+    str_remove_all("factor\\(|\\)") %>%
+    str_replace_all(":", '*') %>%
     str_replace_all(" \\* ","*")%>%
     str_replace_all(" \\+ ","+")
 }
@@ -467,28 +479,30 @@ ajustes_modelos <- log_multipla_BIC_nula %$% tibble(
   Modelo = 0,
   "Fórmula" = "Null",
   Deviance = null.deviance,
-  "g.l." = df.null,
+  "g.l." = "",
   BIC = BIC(.),
   AIC = aic,
-  "Diferença Deviance" = ""
+  "P-valor" = "",
 )
 for (step in 0:4) {
   log_multipla_BIC <- log_multipla %>% stepAIC(
-    trace = T, direction="both", k=log(51), step=step
+    trace = F, direction="both", k=log(51), step=step
   )
-    
+  
   ajustes_modelos %<>% bind_rows(log_multipla_BIC %$% tibble(
     Modelo = step+1,
     "Fórmula" = formatar_explicativas_modelo(formula),
     Deviance = deviance,
-    "g.l." = df.residual,
+    "g.l." = (df.null - df.residual) %>% as.character,
     AIC = aic,
     BIC = BIC(.),
-    "Diferença Deviance" = str_c(
-      abs(null.deviance - deviance) %>% round(2),
-      " (df = ", df.null - df.residual,")"
-    )
-  ))
+    "P-valor" = ifelse(
+      1 - pchisq((null.deviance - deviance), (df.null - df.residual)) < 0.001,
+      "< 0.001",
+      round(pvalor, 3)
+    ),
+  )
+  )
 }
 log_multipla_BIC_mais_simples <- glm(X4 ~ factor(X1) + factor(X2),
                                      family=binomial,
@@ -498,13 +512,14 @@ ajustes_modelos %<>% bind_rows(
     Modelo = step+1,
     "Fórmula" = formatar_explicativas_modelo(formula),
     Deviance = deviance,
-    "g.l." = df.residual,
+    "g.l." = (df.null - df.residual) %>% as.character,
     AIC = aic,
     BIC = BIC(.),
-    "Diferença Deviance" = str_c(
-      abs(null.deviance - deviance) %>% round(2),
-      " (df = ", df.null - df.residual,")"
-    )
+    "P-valor" = ifelse(
+      1 - pchisq((null.deviance - deviance), (df.null - df.residual)) < 0.001,
+      "< 0.001",
+      round(pvalor, 3)
+    ),
   )
 )
 ajustes_modelos$Modelo <- 0:6
@@ -514,218 +529,192 @@ ajustes_modelos %>%
   kableExtra::kable_classic(full_width=F,latex_options = "HOLD_position")
 ```
 
+Os métodos de seleção automática de variáveis, AIC e BIC, identificaram o modelo 5 como mais adequado. O resto dos modelos foram apresentados para facilitar a comparação e justificar a seleção dos 3 modelos candidatos. O modelo 6, que tem o menor número de parâmetros e que apresentou valores ligeriamente superiores de AIC e BIC quando comparado com o modelo 5, foi considerado pelo critério da interpretabilidade.
 
-```{r}
-#library(aicplot)
-library(locfit)
-plot(aicplot(log_multipla_AIC,alpha=seq(0.2,1.0,by=0.05)))
-
-plot(aicplot(log_multipla_BIC,alpha=seq(0.2,1.0,by=0.05)))
-```
-
-
-O modelo final selecionado pelo BIC considera as 3 variáveis sem interações, com forte penalização dos modelos com muitos parâmetros. No entanto, observe como os resultados do AIC e do BIC para o modelo com duas variáveis (resultado da radiografia e estágio do tumor) também apresenta valores relativamente baixos, de 49.73 e 55.53, respectivamente.
-
-
-<!-- FALTA justificar escolha dos dois modelos -->
-
-Assim, considera-se a interpretabilidade como outro fator importante para seleção dos modelos candidatos. Os modelos ajustados são descritos a seguir.
+Como todos os modelos são signifcativos para o teste de ausência de regressão, então selecionamos os dois que tiveram melhor desempenho para o AIC e o BIC (modelo 4 e 5). Além disso, considera-se a interpretabilidade como outro fator importante para seleção dos modelos e, portanto, o modelo 6 também é separado como candidato. Assim, Os modelos ajustados são descritos a seguir.
 
 $$\text{logito}[\hat{\pi}(x)] = -4.59733 + 0.02462x_1 - 2.96608x_2 + 2.89812x_3 + 0.08951x_1x_2$$
 
 $$\text{logito}[\hat{\pi}(x)] = -5.41499 + 0.03323x_1 + 2.80120x_2 + 3.13819x_3$$
+
 $$\text{logito}[\hat{\pi}(x)] = -2.5888 + 2.7833x_2 + 2.5243x_3$$
 
 Para os dois últimos modelos, assume-se que não existe interação entre nível de fofatase ácida e estágio do tumor ou nível de fofatase ácida e resultado da radiografia ou estágio do tumor e resultado da radiografia.
 
 
 ```{r}
-modelo_final_mais_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1), family=binomial, data=treinamento)
-modelo_final_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=treinamento)
-modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2), family=binomial, data=treinamento)
+modelo_final_mais_complexo <- glm(
+  X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1),
+  family=binomial,
+  data=treinamento
+)
+modelo_final_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2),
+                             family=binomial,
+                             data=treinamento)
+modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2),
+                            family=binomial,
+                            data=treinamento)
 ```
 
-<!-- Testando deviance para modelo mais complexo -->
-
-```{r}
-list(modelo_final_mais_complexo, modelo_final_complexo, modelo_final_simples) %>%
-  map_df(function(modelo) {
-    modelo %$% tibble(
-      Modelo                 = formatar_explicativas_modelo(formula),
-      "Estatística do teste" = (est = null.deviance - deviance),
-      "g.l."                 = (df = df.null - df.residual),
-      "p-valor"              = ifelse(
-        (pvalor = 1 - pchisq(est, df)) < 0.001,
-        "< 0.001",
-        round(pvalor, 3)
-      )
-    )
-  }) %>%
-  kableExtra::kbl(
-    digits=2,align=c('l','l','c'),booktabs = T,
-    caption = 'Teste de ausência de regressão para cada modelo'
-  ) %>% 
-  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
-
-```
-
-<!-- Testando deviance para modelo complexo -->
-
-```{r}
-1 - pchisq(modelo_final_complexo$null.deviance - modelo_final_complexo$deviance, length(coef(modelo_final_complexo)))
-```
-
-<!-- Testando deviance para modelo mais simples -->
-
-Dado que o modelo mais complexo se ajusta, deseja-se testar que o modelo mais simples se ajusta.
-
-```{r}
-1 - pchisq(modelo_final_simples$null.deviance - modelo_final_simples$deviance, length(coef(modelo_final_simples)))
-```
 
 <!-- TESTE DE AJUSTAMENTO -->
 
-```{r}
-# teste para modelo mais simples
-1 - pchisq(modelo_final_simples$deviance, modelo_final_simples$df.residual)
-```
+A continuação calculamos os testes de ajuste do modelo. Note que, para o modelo com variável quantitativa contínua utilizamos o teste de Hosmer-Lemeshow.
+
+O teste indica que existem evidências de ajustamento para os modelos de 3 e 4 parâmetros (p-valor de 0.7014 e 0.6480, respectivamente). Por outro lado, para o modelo mais complexo observamos pior desempenho no ajuste (pvalor = 0.106).
+
+A continuação apresentamos as tabelas para os valores observados e esperados considerados no teste de Hosmer-Lemeshow.
 
 ```{r}
+library(ResourceSelection)
+
 # teste para modelo mais complexo (com variável continua)
-hoslem_test_resultado <- hoslem.test(modelo_final_mais_complexo$y, fitted(modelo_final_mais_complexo), g=10)
+hoslem_test_resultado <- hoslem.test(
+  modelo_final_mais_complexo$y,
+  fitted(modelo_final_mais_complexo),
+  g=10
+)
 
 hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
-                esp=hoslem_test_resultado$expected[,2]) %>% mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
 
 hl_df %>% 
-  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
-                  caption = 'Teste Hosmer-Lemeshow',
-                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kbl(
+    .,digits=2,align=c('l','c'),booktabs = T,
+    caption = 'Teste Hosmer-Lemeshow para o modelo de 4 parâmetros e 1 interação',
+    col.names = c("Grupo","Observado","Esperado")
+  ) %>% 
   kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
-```
-
-
-```{r}
-hoslem_test_resultado
 ```
 
 
 ```{r}
 # teste para modelo complexo (com variável continua)
-hoslem_test_resultado <- hoslem.test(modelo_final_complexo$y, fitted(modelo_final_complexo), g=10)
+hoslem_test_resultado <- hoslem.test(modelo_final_complexo$y,
+                                     fitted(modelo_final_complexo), g=10)
 
 hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
-                esp=hoslem_test_resultado$expected[,2]) %>% mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
 
 hl_df %>% 
-  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
-                  caption = 'Teste Hosmer-Lemeshow',
-                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kbl(
+    .,digits=2,align=c('l','c'),booktabs = T,
+    caption = 'Teste Hosmer-Lemeshow para o modelo de 4 parâmetros',
+    col.names = c("Grupo","Observado","Esperado")
+  ) %>% 
   kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
-```
-
-
-```{r}
-hoslem_test_resultado
 ```
 
 
 <!-- COMENTAR Matriz de confusão -->
 
-Observe as matrizes de confusão com o limite de decisão definido em 0.5. (CONFERIR SE É PRA FAZER COM O TREINAMENTO OU VALIDAÇÃO, eu acho que é com validação).
+O desempenho do poder preditivo é analisado a partir da acurácia dos modelos e o gráfico de curvas ROC, considerando banco de validação. O limite de decisão definido é de 0.5.
 
 ```{r}
 library(caret)
-library(yardstick)
-validacao$X4 <- as.factor(validacao$X4)
-probabs_preditas <- predict(modelo_final_mais_complexo, newdata = validacao,type = "response")
+tabela_acuracia <- tibble(modelo = rep(NA,3), acuracia = rep(NA,3))
 
-truth_predicted<-data.frame(
-  obs = validacao$X4,
-  pred = factor(as.vector(ifelse(probabs_preditas > .5, 1, 0)))
+probabs_preditas <- list(
+  predict(modelo_final_mais_complexo, newdata = validacao,type = "response"),
+  predict(modelo_final_complexo, newdata = validacao,type = "response"),
+  predict(modelo_final_simples, newdata = validacao,type = "response")
 )
 
-conf_mat(truth_predicted, obs, pred) %>% autoplot(type = "heatmap") +
-  scale_fill_gradient(low="#D6EAF8",high = "#2E86C1")
 
-#confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_mais_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
+modelos <- c(formatar_explicativas_modelo(modelo_final_mais_complexo$formula),
+             formatar_explicativas_modelo(modelo_final_complexo$formula),
+             formatar_explicativas_modelo(modelo_final_simples$formula))
 
-confusionMatrix(truth_predicted$pred, validacao$X4)$overall[1]
-```
+validacao$X4 <- as.factor(validacao$X4)
 
-```{r}
-confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_complexo) > .5, 1, 0))), factor(treinamento$X4))$table
+for(i in 1:3){
+  
+  truth_predicted <- data.frame(
+    obs = validacao$X4,
+    pred = factor(as.vector(ifelse(probabs_preditas[[i]] > .5, 1, 0)))
+  )
+  
+  tabela_acuracia$modelo[i] <- modelos[i]
+  tabela_acuracia$acuracia[i] <-confusionMatrix(
+    truth_predicted$pred,
+    validacao$X4
+  )$overall[1]
+}
 
-confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_complexo) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
-```
-
-```{r}
-confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_simples) > .5, 1, 0))), factor(treinamento$X4))$table
-
-confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_simples) > .5, 1, 0))), factor(treinamento$X4))$overall[1]
+tabela_acuracia %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Acurácia observada nos modelos candidatos',
+                  col.names = c("Modelo","Acurácia")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
 ```
 
 
 ```{r}
 library(pROC)
 
-invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_mais_complexo)),
-               print.auc = T,
-               col = "red", 
-               main = "Curvas ROC"))
-
-invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_complexo)),
-               col = "orange", 
-               add = T))
-
-invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_simples)),
-               col = "blue", 
-               add = T))
+cowplot::plot_grid(
+  ggroc(roc(treinamento$X4, fitted(modelo_final_mais_complexo)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    labs(title="Modelo de 4 parâmetros + 1 interação")+
+    tema,
+  ggroc(roc(treinamento$X4, fitted(modelo_final_complexo)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    labs(title="Modelo de 4 parâmetros")+
+    tema,
+  ggroc(roc(treinamento$X4, fitted(modelo_final_simples)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    labs(title="Modelo de 3 parâmetros")+
+    tema
+)
 ```
 
 <!-- O modelo mais complexo é superior (AUC é maior) COMENTAR  -->
 
+Para um valor particular de especificidade, o melhor poder preditivo corresponde a uma maior sensibilidade, isto significa, quanto maior a área melhor o poder preditivo. Assim, o modelo com 4 parâmetros apresenta o melhor desempenho se considerarmos o AUC de 0.84, seguido do modelo com uma interação e por último o modelo de 3 parâmetros.
+
+Os resultados observados na curva ROC são condizentes com os da tabela de valores da acurácia para cada modelo.
 
 <!-- ANALISE DE RESIDUOS PADRONIZADOS -->
 
 ```{r}
-res_padronizado_1 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='deviance')) %>%
+res_padronizado_1 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_mais_complexo, type='deviance')
+) %>%
   ggplot(aes(x=index, y=residuos)) +
   geom_point() +
-  labs(title="modelo_final_mais_complexo")+
+  labs(title="Modelo de 4 parâmetros e 1 interação ")+
   geom_hline(yintercept = 0, color="orange") +
   tema
-```
 
-
-```{r}
-res_padronizado_2 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
+res_padronizado_2 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_complexo, type='deviance')
+) %>%
   ggplot(aes(x=index, y=residuos)) +
-  labs(title="modelo_final_complexo")+
+  labs(title="Modelo de 4 parâmetros")+
   geom_point() +
   geom_hline(yintercept = 0, color="orange") +
   tema
-```
 
-
-```{r}
-res_padronizado_3 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance')) %>%
+res_padronizado_3 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_simples, type='deviance')
+) %>%
   ggplot(aes(x=index, y=residuos)) +
   geom_point() +
-  labs(title="modelo_final_simples")+
+  labs(title="Modelo de 3 parâmetros") +
   geom_hline(yintercept = 0, color="orange") +
   tema
 
 
 library(cowplot)
-cowplot::plot_grid(res_padronizado_1,res_padronizado_2,
-                   res_padronizado_3,nrow=2)
+cowplot::plot_grid(res_padronizado_1,res_padronizado_2,res_padronizado_3,nrow=2)
 ```
 
-<!-- Residuos vs valores ajustados -->
+Observamos dos gráficos que o comportamento dos resíduos é bastante estável em todos os modelos. Não existem outliers drasticamente distantes do eixo 0, estando a maioria concentrados entre -1 e 1 e poucos para além de -2 e 2, especialmente nos modelos de dois e três parâmetros.
 
 
 ### 3.2.3 Modelo final
@@ -734,7 +723,9 @@ Tendo em vista os valores de acurácia no banco de validação, o gráfico da cu
 
 ```{r}
 # formula = X4 ~ X3 + factor(X1) + factor(X2)
-modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2), family=binomial, data=amostra)
+modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2),
+                                family=binomial,
+                                data=amostra)
 
 summary(modelo_no_banco_completo)
 ```
@@ -773,22 +764,50 @@ odds_b2_string <- paste("[",round(odds_b2[1],2),",",round(odds_b2[2],2),"]")
 odds_b3 <- exp(b3_ic)
 odds_b3_string <- paste("[",round(odds_b3[1],2),",",round(odds_b3[2],2),"]")
 
-tbl_intervalos_betas_odds <- data.frame("Coeficiente"=c("Beta 1","Beta 2","Beta 3"),
-                                        "Intervalo do coeficiente"=c(b1_ic_string,
-                                                                     b2_ic_string,
-                                                                     b3_ic_string),
-                                        "Odds"=c(exp(b1),exp(b2),exp(b3)),
-                                        "Intervalo da Odds"=c(odds_b1_string,
-                                                              odds_b2_string,
-                                                              odds_b3_string),
-                                        check.names = F)
+tbl_intervalos_betas_odds <- data.frame(
+  "Coeficiente"=c("Beta 1","Beta 2","Beta 3"),
+  "Intervalo do coeficiente"=c(b1_ic_string,
+                               b2_ic_string,
+                               b3_ic_string),
+  "Odds"=c(exp(b1),exp(b2),exp(b3)),
+  "Intervalo da Odds"=c(odds_b1_string,
+                        odds_b2_string,
+                        odds_b3_string),
+  check.names = F
+)
 rownames(tbl_intervalos_betas_odds)<-NULL
 tbl_intervalos_betas_odds %>% 
-  kableExtra::kbl(.,digits=3,align=c('l','c','c','c'),booktabs = T,
-                  caption = 'Intervalos de confiança (95\\%) para o modelo final') %>% 
+  kableExtra::kbl(
+    .,digits=3,align=c('l','c','c','c'),booktabs = T,
+    caption = 'Intervalos de confiança (95\\%) para o modelo final') %>% 
   kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
 ```
+
 O coeficiente $\hat{\beta_1}$, que acompanha a variável resultado da radiografia, indica que, mantendo todo o restante constante, o resultado positivo representa de 3,67 até 65,7 vezes a chance de **não** ter envolvimento nodal, em comparação com o resultado negativo. Já o coeficiente $\hat{\beta_2}$, que acompanha a variável estágio do tumor, indica que, dado todo o restante constante, o estágio de tumor mais grave representa de 5,64 até 108,5 vezes a chance de **não** ter o quadro de envolvimento nodal, em comparação com o estágio de tumor menos grave. Por fim, o parâmetro $\hat{\beta_3}$, referente ao nível de fosfatase ácida, revela que o incremento de 1 unidade (na escala x100) na fosfatase acarreta em um aumento multiplicativo na chance de **não** ter envolvimento nodal de 1,01 até 1,05, isto é, de 1% até 5%.
+
+Por fim, segue o gráfico das curvas do modelo ajustado para cada combinação das variáveis categóricas (estágio do tumor e resultado da radiografia):
+```{r,fig.width=8,out.width = '80%'}
+pontos_x3 = seq(from=0, to=max(amostra$X3), by=0.01)
+B0 = modelo_final_complexo$coefficients[1]
+B1_X3 = modelo_final_complexo$coefficients[2]
+B2_X1 = modelo_final_complexo$coefficients[3]
+B3_X2 = modelo_final_complexo$coefficients[4]
+
+map_df(0:1, function(x1_dummy) {
+  map_df(0:1, function(x2_dummy) {
+    tibble(
+      x1=x1_dummy,
+      x2=x2_dummy,
+      grupo=str_c("(X1=",x1,", X2=",x2, ")"),
+      x3=pontos_x3,
+      logito=B0 + B1_X3*x3 + B2_X1*x1 + B3_X2*x2,
+      prob=exp(logito)/(1 + exp(logito)),
+    )
+  })
+}) %>%
+  ggplot() +
+  geom_path(aes(x=x3, y=prob, color=grupo, group=grupo))+ theme_bw()
+```
 
 \newpage
 
@@ -800,10 +819,555 @@ Desta forma, foi aplicado o procedimento de regressão logística múltipla, ond
 
 De modo geral, o resultado da radiografia negativo impactou positivamente na probabilidade de haver envolvimento nodal, assim como o estágio de tumor menos grave também parece gerar impacto significativo no aumento dessa probabilidade. Em relação ao nível de fosfatase ácida, apesar de ser maior, em média, em pacientes sem envolvimento nodal, os valores discrepantes presentes no grupo que possui envolvimento nodal podem ter repercurtido e afetado o modelo final. De todo modo, o aumento de uma unidade no nível de fosfatase indicou um aumento multiplicativo na chance de não ter envolvimento nodal de até 5%.
 
+
 \newpage
 
 # 5. Apêndice
 
 ```{r, eval=F, echo=T}
+
+# Carregar os dados
+library(readxl)
+library(tidyverse)
+setwd(getwd())
+
+amostra <- read_xlsx(path="Amostra_g06.xlsx",
+                     sheet = "Amostra_g06")
+
+# Seleciona a amostra n=51
+set.seed(12345)
+rows_index <- sample(1:nrow(amostra),51)
+treinamento <- amostra[rows_index,]
+validacao <- amostra[-rows_index,]
+
+#Define o tema dos gráficos
+tema <- theme_bw()+
+  theme(axis.title.y=element_text(colour="black", size=14),
+        axis.title.x = element_text(colour="black", size=14),
+        axis.text = element_text(colour = "black", size=14),
+        panel.border = element_blank(),
+        axis.line = element_line(colour = "black"),
+        plot.title = element_text(hjust = 0.5, size=12),
+        legend.position = "bottom",
+        legend.text=element_text(size=18))
+
+# X1 - Resultado da radiografia
+# 0 – negativo 1 – positivo
+
+Fr <- table(amostra$X1)
+Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
+colnames(Pr)<-c("Var1","Pr" )
+comp <- merge(Fr,Pr, by= "Var1" )
+comp$Pr<-paste(gsub( "\\." , "," ,comp$Pr ) , "%" , sep="")
+comp$Var1 <- c("Negativo","Positivo")
+
+# Grafico barras
+ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
+  geom_bar(stat="identity",fill="#6E6DB8")+
+  geom_text(vjust=-0.5,size=4)+
+  labs(x="Resultado da radiografia",y="Frequência Absoluta")+
+  tema
+
+# X2 - Estágio do tumor
+# 0 – menos grave ou 1 – mais grave
+Fr <- table(amostra$X2)
+Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
+colnames(Pr)<-c("Var1","Pr" )
+comp <- merge(Fr,Pr, by= "Var1" )
+comp$Pr<-paste(gsub( "\\." , "," ,comp$Pr ) , "%" , sep="")
+comp$Var1 <- c("Menos grave","Mais grave")
+
+# Grafico barras
+ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
+  geom_bar(stat="identity",fill="#6E6DB8")+
+  geom_text(vjust=-0.5,size=4)+
+  labs(x="Estágio do tumor",y="Frequência Absoluta")+
+  tema
+
+# X3 - Nível de fosfatase ácida
+
+# Boxplot
+
+ggplot(amostra, aes(x=factor(""), y=X3)) +
+  geom_boxplot(fill=c("#6E6DB8"),width=0.5) +
+  guides(fill=FALSE) +
+  stat_summary(fun.y="mean",geom="point",shape=23,size=3,
+               fill="white") +
+  labs(x="",y="Nível de fosfatase ácida") +
+  tema
+
+# Tabela medidas resumo
+library(kableExtra)
+
+summaryX3 <- summary(amostra$X3)
+
+tbl1 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
+                                   "Mediana","Média","3º Quartil",
+                                   "Máximo","Desvio Padrão"),
+                   "Valor"=c(summaryX3,sd(amostra$X3)),
+                   check.names = F)
+
+rownames(tbl1)<-NULL
+
+tbl1 %>%
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Medidas resumo do nível de fosfatase ácida') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+# X4 - Envolvimento nodal
+# 0 – sim 1 – não
+
+Fr <- table(amostra$X4)
+Pr <- as.data.frame(round(prop.table(Fr) , digits=4 ) * 100 )
+colnames(Pr)<-c("Var1","Pr" )
+comp <- merge(Fr,Pr, by= "Var1" )
+comp$Pr<-paste(gsub( "\\." , "," ,comp$Pr ) , "%" , sep="")
+comp$Var1 <- c("Sim","Não")
+
+# Grafico barras
+ggplot(comp,aes(x=Var1,y=Freq,label=Pr))+
+  geom_bar(stat="identity",fill="#6E6DB8")+
+  geom_text(vjust=-0.5,size=4)+
+  labs(x="Envolvimento nodal",y="Frequência Absoluta")+
+  tema
+
+library(gmodels)
+library(epitab)
+
+# X1 e X2 vs X4
+tbl_contingencia<-amostra
+tbl_contingencia$X1 <- ifelse(tbl_contingencia$X1==0,"Negativo","Positivo")
+tbl_contingencia$X4 <- ifelse(tbl_contingencia$X4==0,"Sim","Nao")
+tbl_contingencia$X2 <- ifelse(tbl_contingencia$X2==0,"Menos grave","Mais grave")
+tbl_contingencia$X4 <- factor(tbl_contingencia$X4,levels=c("Sim","Nao"))
+tbl_contingencia$X1 <-factor(tbl_contingencia$X1,levels=c("Negativo","Positivo"))
+tbl_contingencia$X2 <- factor(tbl_contingencia$X2,levels=c("Menos grave",
+                                                           "Mais grave"))
+
+# tabela contingencia (formato de saída do SAS)
+contingency_table(
+  independents = list("Resultado radiografia"="X1","Estagio do tumor"="X2"),
+  outcomes = list("Envolvimento nodal"="X4"),
+  crosstab_funcs = list(freq()),
+  row_funcs = list("Odds"=odds_ratio("X4")),
+  data=tbl_contingencia) %>%
+  neat_table(
+    format = 'latex',
+    booktabs=TRUE,
+    caption="Frequências de envolvimento nodal por resultado da radiografia e estágio do tumor"
+  ) %>%
+  kableExtra::kable_classic(latex_options = "HOLD_position")
+
+# teste correlação 
+# testes de associacao qui-quadrado  
+bivariadas<-amostra
+names(bivariadas)<-c("ID","Resultado da radiografia",
+                     "Estágio do tumor","Nível de fosfatase ácida",
+                     "Envolvimento nodal")
+bivariadas$`Envolvimento nodal`<- as.factor(bivariadas$`Envolvimento nodal`)
+teste_radiog <- chisq.test(bivariadas$`Resultado da radiografia`,
+                           bivariadas$`Envolvimento nodal`)
+teste_tumor <- chisq.test(bivariadas$`Estágio do tumor`,
+                          bivariadas$`Envolvimento nodal`)
+# tabela p-valores
+# teste_radiog$p.value<0.0001 #TRUE
+# teste_tumor$p.value<0.0001  #TRUE
+tbl_teste <- data.frame(
+  "Variável"=c("Resultado da radiografia", "Estágio do tumor"),
+  "Estatística do teste"=c(teste_radiog$statistic,teste_tumor$statistic),
+  "Graus de liberdade"=c(teste_radiog$parameter, teste_tumor$parameter),
+  "P-valor"=c("<0.0001","<0.0001"),
+  check.names = F
+)
+
+tbl_teste %>%
+  kableExtra::kbl(
+    .,digits=3,align=c('l','c','c','c'),booktabs = T,
+    caption = 'Testes Qui-Quadrado de independência com envolvimento nodal') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+# X3 vs X4
+bivariadas$`Envolvimento nodal`<- ifelse(
+  bivariadas$`Envolvimento nodal`==0,
+  "Sim",
+  "Não"
+)
+
+#Boxplot
+ggplot(bivariadas,aes(x=`Envolvimento nodal`,y=`Nível de fosfatase ácida`)) +
+  geom_boxplot(fill=c("#6E6DB8"),width=0.5) +
+  stat_summary(fun.y="mean",geom="point",shape=23,size=3,fill="white") +
+  labs(x="Envolvimento nodal",y="Nível de fosfatase ácida") +
+  tema
+
+# Tabela X3 vs X4
+library(magrittr)
+env_nodal <- amostra %>% filter(X4==0)
+sem_env_nodal <- amostra %>% filter(X4==1)
+tbl2 <- data.frame("Estatística"=c("Mínimo","1º Quartil",
+                                   "Mediana","Média","3º Quartil",
+                                   "Máximo","Desvio Padrão"),
+                   "Sem envolvimento nodal"=c(summary(sem_env_nodal$X3),
+                                              sd(sem_env_nodal$X3)),
+                   "Com envolvimento nodal"=c(summary(env_nodal$X3),
+                                              sd(env_nodal$X3)),
+                   check.names = F)
+rownames(tbl2)<-NULL
+
+tbl2 %>%
+  kableExtra::kbl(
+    .,digits=2,align=c('l','c','c'),booktabs = T,
+    caption = 'Medidas resumo da fosfatase ácida por envolvimento nodal'
+  ) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+treinamento %>% ggplot(aes(x=X3, y=X4)) + 
+  geom_point() + 
+  geom_smooth(method = "glm", 
+              method.args = list(family = "binomial"), 
+              se = FALSE, color="#6E6DB8", size=0.6) +
+  labs(y="Envolvimento nodal",x="Nível de fosfatase ácida") +
+  tema
+
+
+log_simples <- glm(X4 ~ X3, family=binomial, data=treinamento)
+summary(log_simples)
+
+confint(log_simples) # profile likelihood confidence interval
+
+lp <- predict(log_simples, newdata=validacao, se.fit=TRUE) # preditor linear
+prob_preditas <- exp(lp$fit)/(1 + exp(lp$fit))
+LB <- lp$fit - qnorm(0.975)*lp$se.fit
+UB <- lp$fit + qnorm(0.975)*lp$se.fit
+LB_p <- exp(LB)/(1 + exp(LB)) 
+UB_p <- exp(UB)/(1 + exp(UB))
+
+tabela_preditos <- tibble(
+  X3=validacao$X3,
+  prob_preditas = prob_preditas,
+  LB_p = LB_p,
+  UB_p = UB_p
+)
+
+validacao %>% ggplot(aes(x=X3, y=X4)) + 
+  geom_point() +
+  geom_line(data=tabela_preditos, 
+            aes(x=X3, y=prob_preditas), 
+            color="#6E6DB8", size=0.6) +
+  geom_line(data=tabela_preditos,
+            aes(x=X3, y=LB_p), 
+            color="#F1A661", size=0.6,
+            linetype = "dashed") +
+  geom_line(data=tabela_preditos, 
+            aes(x=X3, y=UB_p), 
+            color="#F1A661", size=0.6,
+            linetype = "dashed") +
+  labs(y="Envolvimento nodal",x="Nível de fosfatase ácida") +
+  tema
+
+library(kableExtra)
+library(ResourceSelection)
+hoslem_test_resultado <- hoslem.test(log_simples$y, fitted(log_simples), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Teste Hosmer-Lemeshow',
+                  col.names = c("Grupo","Observado","Esperado")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+hoslem_test_resultado
+
+
+log_multipla <- glm(X4 ~ X3 + factor(X1) + factor(X2) +
+                      X3*factor(X1) + X3*factor(X2) + factor(X1)*factor(X2) +
+                      X3*factor(X1)*factor(X2),
+                    family=binomial, data=treinamento)
+
+library(MASS)
+log_multipla_AIC <- log_multipla %>% stepAIC(trace = F, direction="both")
+
+library(magrittr)
+formatar_explicativas_modelo = function(formula) {
+  formula %>%
+    {as.character(.)[3]} %>%
+    str_remove_all("factor\\(|\\)") %>%
+    str_replace_all(":", '*') %>%
+    str_replace_all(" \\* ","*")%>%
+    str_replace_all(" \\+ ","+")
+}
+log_multipla_BIC_nula = glm(X4~., family=binomial, data=treinamento)
+
+ajustes_modelos <- log_multipla_BIC_nula %$% tibble(
+  Modelo = 0,
+  "Fórmula" = "Null",
+  Deviance = null.deviance,
+  "g.l." = "",
+  BIC = BIC(.),
+  AIC = aic,
+  "P-valor" = "",
+)
+for (step in 0:4) {
+  log_multipla_BIC <- log_multipla %>% stepAIC(
+    trace = F, direction="both", k=log(51), step=step
+  )
+  
+  ajustes_modelos %<>% bind_rows(log_multipla_BIC %$% tibble(
+    Modelo = step+1,
+    "Fórmula" = formatar_explicativas_modelo(formula),
+    Deviance = deviance,
+    "g.l." = (df.null - df.residual) %>% as.character,
+    AIC = aic,
+    BIC = BIC(.),
+    "P-valor" = ifelse(
+      1 - pchisq((null.deviance - deviance), (df.null - df.residual)) < 0.001,
+      "< 0.001",
+      round(pvalor, 3)
+    ),
+  )
+  )
+}
+log_multipla_BIC_mais_simples <- glm(X4 ~ factor(X1) + factor(X2),
+                                     family=binomial,
+                                     data=treinamento)
+ajustes_modelos %<>% bind_rows(
+  log_multipla_BIC_mais_simples %$% tibble(
+    Modelo = step+1,
+    "Fórmula" = formatar_explicativas_modelo(formula),
+    Deviance = deviance,
+    "g.l." = (df.null - df.residual) %>% as.character,
+    AIC = aic,
+    BIC = BIC(.),
+    "P-valor" = ifelse(
+      1 - pchisq((null.deviance - deviance), (df.null - df.residual)) < 0.001,
+      "< 0.001",
+      round(pvalor, 3)
+    ),
+  )
+)
+ajustes_modelos$Modelo <- 0:6
+ajustes_modelos %>%
+  kableExtra::kbl(digits=2,align=c('l','l','l','l','l','l','l'),booktabs = T,
+                  caption = 'Medidas de ajuste dos modelos') %>% 
+  kableExtra::kable_classic(full_width=F,latex_options = "HOLD_position")
+
+
+modelo_final_mais_complexo <- glm(
+  X4 ~ X3 + factor(X1) + factor(X2) + X3*factor(X1),
+  family=binomial,
+  data=treinamento
+)
+modelo_final_complexo <- glm(X4 ~ X3 + factor(X1) + factor(X2),
+                             family=binomial,
+                             data=treinamento)
+modelo_final_simples <- glm(X4 ~ factor(X1) + factor(X2),
+                            family=binomial,
+                            data=treinamento)
+
+library(ResourceSelection)
+
+# teste para modelo mais complexo (com variável continua)
+hoslem_test_resultado <- hoslem.test(
+  modelo_final_mais_complexo$y,
+  fitted(modelo_final_mais_complexo),
+  g=10
+)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(
+    .,digits=2,align=c('l','c'),booktabs = T,
+    caption = 'Teste Hosmer-Lemeshow para o modelo de 4 parâmetros e 1 interação',
+    col.names = c("Grupo","Observado","Esperado")
+  ) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+
+# teste para modelo complexo (com variável continua)
+hoslem_test_resultado <- hoslem.test(modelo_final_complexo$y,
+                                     fitted(modelo_final_complexo), g=10)
+
+hl_df <- tibble(obs=hoslem_test_resultado$observed[,2], 
+                esp=hoslem_test_resultado$expected[,2]) %>%
+  mutate(grupo=seq(1,10)) %>% dplyr::select(grupo,obs,esp)
+
+hl_df %>% 
+  kableExtra::kbl(
+    .,digits=2,align=c('l','c'),booktabs = T,
+    caption = 'Teste Hosmer-Lemeshow para o modelo de 4 parâmetros',
+    col.names = c("Grupo","Observado","Esperado")
+  ) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+library(caret)
+tabela_acuracia <- tibble(modelo = rep(NA,3), acuracia = rep(NA,3))
+
+probabs_preditas <- list(
+  predict(modelo_final_mais_complexo, newdata = validacao,type = "response"),
+  predict(modelo_final_complexo, newdata = validacao,type = "response"),
+  predict(modelo_final_simples, newdata = validacao,type = "response")
+)
+
+
+modelos <- c(formatar_explicativas_modelo(modelo_final_mais_complexo$formula),
+             formatar_explicativas_modelo(modelo_final_complexo$formula),
+             formatar_explicativas_modelo(modelo_final_simples$formula))
+
+validacao$X4 <- as.factor(validacao$X4)
+
+for(i in 1:3){
+  
+  truth_predicted <- data.frame(
+    obs = validacao$X4,
+    pred = factor(as.vector(ifelse(probabs_preditas[[i]] > .5, 1, 0)))
+  )
+  
+  tabela_acuracia$modelo[i] <- modelos[i]
+  tabela_acuracia$acuracia[i] <-confusionMatrix(
+    truth_predicted$pred,
+    validacao$X4
+  )$overall[1]
+}
+
+tabela_acuracia %>% 
+  kableExtra::kbl(.,digits=2,align=c('l','c'),booktabs = T,
+                  caption = 'Acurácia observada nos modelos candidatos',
+                  col.names = c("Modelo","Acurácia")) %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+library(pROC)
+
+cowplot::plot_grid(
+  ggroc(roc(treinamento$X4, fitted(modelo_final_mais_complexo)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    labs(title="Modelo de 4 parâmetros + 1 interação")+
+    tema,
+  ggroc(roc(treinamento$X4, fitted(modelo_final_complexo)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    labs(title="Modelo de 4 parâmetros")+
+    tema,
+  ggroc(roc(treinamento$X4, fitted(modelo_final_simples)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    labs(title="Modelo de 3 parâmetros")+
+    tema
+)
+
+res_padronizado_1 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_mais_complexo, type='deviance')
+) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  labs(title="Modelo de 4 parâmetros e 1 interação ")+
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+
+res_padronizado_2 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_complexo, type='deviance')
+) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  labs(title="Modelo de 4 parâmetros")+
+  geom_point() +
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+
+res_padronizado_3 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_simples, type='deviance')
+) %>%
+  ggplot(aes(x=index, y=residuos)) +
+  geom_point() +
+  labs(title="Modelo de 3 parâmetros") +
+  geom_hline(yintercept = 0, color="orange") +
+  tema
+
+
+library(cowplot)
+cowplot::plot_grid(res_padronizado_1,res_padronizado_2,res_padronizado_3,nrow=2)
+
+
+# formula = X4 ~ X3 + factor(X1) + factor(X2)
+modelo_no_banco_completo <- glm(X4 ~ X3 + factor(X1) + factor(X2),
+                                family=binomial,
+                                data=amostra)
+
+summary(modelo_no_banco_completo)
+
+# Intevalos para os parametros (95%)
+
+z <- qnorm(0.975)
+b1 <- modelo_no_banco_completo$coefficients[3]
+b2 <- modelo_no_banco_completo$coefficients[4]
+b3<- modelo_no_banco_completo$coefficients[2]
+ASE1 <- summary(modelo_no_banco_completo)$coefficients[3,2]
+ASE2 <- summary(modelo_no_banco_completo)$coefficients[4,2]
+ASE3 <- summary(modelo_no_banco_completo)$coefficients[2,2] 
+# b1
+b1_ic <- c(b1-z*ASE1,b1+z*ASE1)
+b1_ic_string <- paste("[",round(b1_ic[1],2),",",round(b1_ic[2],2),"]")
+# b2
+b2_ic <- c(b2-z*ASE2,b2+z*ASE2)
+b2_ic_string <- paste("[",round(b2_ic[1],2),",",round(b2_ic[2],2),"]")
+
+# b3
+b3_ic <- c(b3-z*ASE3,b3+z*ASE3)
+b3_ic_string <- paste("[",round(b3_ic[1],2),",",round(b3_ic[2],2),"]")
+
+
+# Intervalos para odds
+
+odds_b1 <- exp(b1_ic)
+odds_b1_string <- paste("[",round(odds_b1[1],2),",",round(odds_b1[2],2),"]")
+odds_b2 <- exp(b2_ic)
+odds_b2_string <- paste("[",round(odds_b2[1],2),",",round(odds_b2[2],2),"]")
+odds_b3 <- exp(b3_ic)
+odds_b3_string <- paste("[",round(odds_b3[1],2),",",round(odds_b3[2],2),"]")
+
+tbl_intervalos_betas_odds <- data.frame(
+  "Coeficiente"=c("Beta 1","Beta 2","Beta 3"),
+  "Intervalo do coeficiente"=c(b1_ic_string,
+                               b2_ic_string,
+                               b3_ic_string),
+  "Odds"=c(exp(b1),exp(b2),exp(b3)),
+  "Intervalo da Odds"=c(odds_b1_string,
+                        odds_b2_string,
+                        odds_b3_string),
+  check.names = F
+)
+rownames(tbl_intervalos_betas_odds)<-NULL
+tbl_intervalos_betas_odds %>% 
+  kableExtra::kbl(
+    .,digits=3,align=c('l','c','c','c'),booktabs = T,
+    caption = 'Intervalos de confiança (95\\%) para o modelo final') %>% 
+  kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
+
+pontos_x3 = seq(from=0, to=max(amostra$X3), by=0.01)
+B0 = modelo_final_complexo$coefficients[1]
+B1_X3 = modelo_final_complexo$coefficients[2]
+B2_X1 = modelo_final_complexo$coefficients[3]
+B3_X2 = modelo_final_complexo$coefficients[4]
+
+map_df(0:1, function(x1_dummy) {
+  map_df(0:1, function(x2_dummy) {
+    tibble(
+      x1=x1_dummy,
+      x2=x2_dummy,
+      grupo=str_c("(X1=",x1,", X2=",x2, ")"),
+      x3=pontos_x3,
+      logito=B0 + B1_X3*x3 + B2_X1*x1 + B3_X2*x2,
+      prob=exp(logito)/(1 + exp(logito)),
+    )
+  })
+}) %>%
+  ggplot() +
+  geom_path(aes(x=x3, y=prob, color=grupo, group=grupo))+ theme_bw()
+
 
 ```
