@@ -103,7 +103,7 @@ tema <- theme_bw()+
         axis.text = element_text(colour = "black", size=14),
         panel.border = element_blank(),
         axis.line = element_line(colour = "black"),
-        plot.title = element_text(hjust = 0.5, size=18),
+        plot.title = element_text(hjust = 0.5, size=12),
         legend.position = "bottom",
         legend.text=element_text(size=18))
 
@@ -638,7 +638,11 @@ Observe as matrizes de confusão com o limite de decisão definido em 0.5. (CONF
 library(caret)
 library(yardstick)
 validacao$X4 <- as.factor(validacao$X4)
-probabs_preditas <- predict(modelo_final_mais_complexo, newdata = validacao,type = "response")
+probabs_preditas <- predict(
+  modelo_final_mais_complexo,
+  newdata = validacao,
+  type = "response"
+)
 
 truth_predicted<-data.frame(
   obs = validacao$X4,
@@ -669,21 +673,17 @@ confusionMatrix(factor(as.vector(ifelse(fitted(modelo_final_simples) > .5, 1, 0)
 ```{r}
 library(pROC)
 
-invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_mais_complexo)),
-               print.auc = T,
-               col = "red", 
-               main = "Curvas ROC"))
-
-invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_complexo)),
-               col = "orange", 
-               add = T))
-
-invisible(plot(roc(treinamento$X4,
-                   fitted(modelo_final_simples)),
-               col = "blue", 
-               add = T))
+cowplot::plot_grid(
+  ggroc(roc(treinamento$X4, fitted(modelo_final_mais_complexo)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    tema,
+  ggroc(roc(treinamento$X4, fitted(modelo_final_complexo)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    tema,
+  ggroc(roc(treinamento$X4, fitted(modelo_final_simples)), colour='red') +
+    geom_abline(intercept = 1, slope=1, alpha=.3) +
+    tema
+)
 ```
 
 <!-- O modelo mais complexo é superior (AUC é maior) COMENTAR  -->
@@ -692,40 +692,42 @@ invisible(plot(roc(treinamento$X4,
 <!-- ANALISE DE RESIDUOS PADRONIZADOS -->
 
 ```{r}
-res_padronizado_1 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_mais_complexo, type='deviance')) %>%
+res_padronizado_1 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_mais_complexo, type='deviance')
+) %>%
   ggplot(aes(x=index, y=residuos)) +
   geom_point() +
-  labs(title="modelo_final_mais_complexo")+
+  labs(title="Modelo de 4 parâmetros e 1 interação ")+
   geom_hline(yintercept = 0, color="orange") +
   tema
-```
 
-
-```{r}
-res_padronizado_2 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_complexo, type='deviance')) %>%
+res_padronizado_2 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_complexo, type='deviance')
+) %>%
   ggplot(aes(x=index, y=residuos)) +
-  labs(title="modelo_final_complexo")+
+  labs(title="Modelo de três parâmetros")+
   geom_point() +
   geom_hline(yintercept = 0, color="orange") +
   tema
-```
 
-
-```{r}
-res_padronizado_3 <- tibble(index=seq(1,51), residuos=rstandard(modelo_final_simples, type='deviance')) %>%
+res_padronizado_3 <- tibble(
+  index=seq(1,51),
+  residuos=rstandard(modelo_final_simples, type='deviance')
+) %>%
   ggplot(aes(x=index, y=residuos)) +
   geom_point() +
-  labs(title="modelo_final_simples")+
+  labs(title="Modelo de dois parâmetros") +
   geom_hline(yintercept = 0, color="orange") +
   tema
 
 
 library(cowplot)
-cowplot::plot_grid(res_padronizado_1,res_padronizado_2,
-                   res_padronizado_3,nrow=2)
+cowplot::plot_grid(res_padronizado_1,res_padronizado_2,res_padronizado_3,nrow=2)
 ```
 
-<!-- Residuos vs valores ajustados -->
+Observamos dos gráficos que o comportamento dos resíduos é bastante estável em todos os modelos. Não existem outliers drasticamente distantes do eixo 0, estando a maioria concentrados entre -1 e 1 e poucos para além de -2 e 2, especialmente nos modelos de dois e três parâmetros.
 
 
 ### 3.2.3 Modelo final
@@ -788,6 +790,7 @@ tbl_intervalos_betas_odds %>%
                   caption = 'Intervalos de confiança (95\\%) para o modelo final') %>% 
   kableExtra::kable_classic(full_width=FALSE,latex_options = "HOLD_position")
 ```
+
 O coeficiente $\hat{\beta_1}$, que acompanha a variável resultado da radiografia, indica que, mantendo todo o restante constante, o resultado positivo representa de 3,67 até 65,7 vezes a chance de **não** ter envolvimento nodal, em comparação com o resultado negativo. Já o coeficiente $\hat{\beta_2}$, que acompanha a variável estágio do tumor, indica que, dado todo o restante constante, o estágio de tumor mais grave representa de 5,64 até 108,5 vezes a chance de **não** ter o quadro de envolvimento nodal, em comparação com o estágio de tumor menos grave. Por fim, o parâmetro $\hat{\beta_3}$, referente ao nível de fosfatase ácida, revela que o incremento de 1 unidade (na escala x100) na fosfatase acarreta em um aumento multiplicativo na chance de **não** ter envolvimento nodal de 1,01 até 1,05, isto é, de 1% até 5%.
 
 \newpage
@@ -800,6 +803,29 @@ Desta forma, foi aplicado o procedimento de regressão logística múltipla, ond
 
 De modo geral, o resultado da radiografia negativo impactou positivamente na probabilidade de haver envolvimento nodal, assim como o estágio de tumor menos grave também parece gerar impacto significativo no aumento dessa probabilidade. Em relação ao nível de fosfatase ácida, apesar de ser maior, em média, em pacientes sem envolvimento nodal, os valores discrepantes presentes no grupo que possui envolvimento nodal podem ter repercurtido e afetado o modelo final. De todo modo, o aumento de uma unidade no nível de fosfatase indicou um aumento multiplicativo na chance de não ter envolvimento nodal de até 5%.
 
+Por fim, segue o gráfico das curvas do modelo ajustado para cada combinação das variáveis categóricas (estágio do tumor e resultado da radiografia):
+```{r}
+pontos_x3 = seq(from=0, to=max(amostra$X3), by=0.01)
+B0 = modelo_final_complexo$coefficients[1]
+B1_X3 = modelo_final_complexo$coefficients[2]
+B2_X1 = modelo_final_complexo$coefficients[3]
+B3_X2 = modelo_final_complexo$coefficients[4]
+
+map_df(0:1, function(x1_dummy) {
+  map_df(0:1, function(x2_dummy) {
+    tibble(
+      x1=x1_dummy,
+      x2=x2_dummy,
+      grupo=str_c("(X1=",x1,", X2=",x2, ")"),
+      x3=pontos_x3,
+      logito=B0 + B1_X3*x3 + B2_X1*x1 + B3_X2*x2,
+      prob=exp(logito)/(1 + exp(logito)),
+    )
+  })
+}) %>%
+  ggplot() +
+  geom_path(aes(x=x3, y=prob, color=grupo, group=grupo))
+```
 \newpage
 
 # 5. Apêndice
